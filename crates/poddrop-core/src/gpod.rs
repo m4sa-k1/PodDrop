@@ -5,7 +5,8 @@ use std::path::{Path, PathBuf};
 use std::ptr;
 
 use crate::backend::{
-    IpodBackend, TrackMetadata, TransferTrackRequest, TransferTrackResult, UpdateTrackRequest,
+    IpodBackend, TrackMetadata, TransferTrackRequest, TransferTrackResult, UpdateAlbumRequest,
+    UpdateTrackRequest,
 };
 use crate::backup::create_prewrite_backup;
 use crate::device::{DeviceInfo, DeviceModel, FilesystemType};
@@ -66,6 +67,17 @@ struct PodDropGpodUpdateTrackRequest {
     clear_artwork: i32,
 }
 
+#[repr(C)]
+struct PodDropGpodUpdateAlbumRequest {
+    old_album: *const c_char,
+    new_album: *const c_char,
+    new_artist: *const c_char,
+    new_genre: *const c_char,
+    year: i32,
+    artwork_path: *const c_char,
+    clear_artwork: i32,
+}
+
 extern "C" {
     fn poddrop_gpod_inspect(
         mount_path: *const c_char,
@@ -103,6 +115,12 @@ extern "C" {
         mount_path: *const c_char,
         track_id: u64,
         req: *const PodDropGpodUpdateTrackRequest,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_update_album(
+        mount_path: *const c_char,
+        req: *const PodDropGpodUpdateAlbumRequest,
+        out_updated_count: *mut u32,
         out_err: *mut *mut c_char,
     ) -> c_int;
     fn poddrop_statvfs(
@@ -410,6 +428,58 @@ impl IpodBackend for LibgpodBackend {
             return Err(PodDropError::Backend(take_c_error(err_ptr)));
         }
         Ok(())
+    }
+
+    fn update_album(&self, mount_path: &Path, request: &UpdateAlbumRequest) -> Result<u32> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_old = str_to_cstring(&request.old_album)?;
+        let c_album = request
+            .new_album
+            .as_deref()
+            .map(str_to_cstring)
+            .transpose()?;
+        let c_artist = request
+            .new_artist
+            .as_deref()
+            .map(str_to_cstring)
+            .transpose()?;
+        let c_genre = request
+            .new_genre
+            .as_deref()
+            .map(str_to_cstring)
+            .transpose()?;
+        let c_art = request
+            .artwork_path
+            .as_deref()
+            .map(path_to_cstring)
+            .transpose()?;
+
+        let raw = PodDropGpodUpdateAlbumRequest {
+            old_album: c_old.as_ptr(),
+            new_album: c_album.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+            new_artist: c_artist.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+            new_genre: c_genre.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+            year: request.year.map_or(-1, |v| v as i32),
+            artwork_path: c_art.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+            clear_artwork: i32::from(request.clear_artwork),
+        };
+
+        let mut updated: u32 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            poddrop_gpod_update_album(c_mount.as_ptr(), &raw, &mut updated, &mut err_ptr)
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(updated)
     }
 }
 

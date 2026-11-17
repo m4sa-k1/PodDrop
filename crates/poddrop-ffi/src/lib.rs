@@ -5,7 +5,9 @@ use std::os::raw::c_char;
 use std::path::{Path, PathBuf};
 use std::ptr;
 
-use poddrop_core::backend::{IpodBackend, TransferTrackRequest, UpdateTrackRequest};
+use poddrop_core::backend::{
+    IpodBackend, TransferTrackRequest, UpdateAlbumRequest, UpdateTrackRequest,
+};
 use poddrop_core::backup::default_backup_root;
 use poddrop_core::gpod::{discover_mounted_ipods, LibgpodBackend};
 use poddrop_core::media::TranscodeFormat;
@@ -63,6 +65,17 @@ pub struct PodDropUpdateRequest {
     pub genre: *const c_char,
     pub track_number: i32,
     pub disc_number: i32,
+    pub year: i32,
+    pub artwork_path: *const c_char,
+    pub clear_artwork: i32,
+}
+
+#[repr(C)]
+pub struct PodDropUpdateAlbumRequest {
+    pub old_album: *const c_char,
+    pub new_album: *const c_char,
+    pub new_artist: *const c_char,
+    pub new_genre: *const c_char,
     pub year: i32,
     pub artwork_path: *const c_char,
     pub clear_artwork: i32,
@@ -282,6 +295,52 @@ pub unsafe extern "C" fn poddrop_update_track(
 
     match LibgpodBackend::new().update_track(Path::new(&mp), track_id, &update_req) {
         Ok(()) => 0,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_update_album(
+    mount_path: *const c_char,
+    req: *const PodDropUpdateAlbumRequest,
+    out_updated_count: *mut u32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Invalid mount_path");
+        return -1;
+    };
+    if req.is_null() {
+        set_err(out_err, "Null update album request");
+        return -1;
+    }
+    let r = unsafe { &*req };
+    let Some(old_album) = (unsafe { cstr_to_opt(r.old_album) }) else {
+        set_err(out_err, "Invalid old_album");
+        return -1;
+    };
+
+    let update_req = UpdateAlbumRequest {
+        old_album,
+        new_album: unsafe { cstr_to_opt_allow_empty(r.new_album) },
+        new_artist: unsafe { cstr_to_opt_allow_empty(r.new_artist) },
+        new_genre: unsafe { cstr_to_opt_allow_empty(r.new_genre) },
+        year: u32::try_from(r.year).ok(),
+        artwork_path: unsafe { cstr_to_opt(r.artwork_path) }.map(PathBuf::from),
+        clear_artwork: r.clear_artwork != 0,
+    };
+
+    match LibgpodBackend::new().update_album(Path::new(&mp), &update_req) {
+        Ok(cnt) => {
+            if !out_updated_count.is_null() {
+                unsafe { *out_updated_count = cnt };
+            }
+            0
+        }
         Err(e) => {
             set_err(out_err, &e.to_string());
             -1

@@ -60,6 +60,7 @@ private:
     void addMusicFiles();
     void createAlbum(const QString &initialAlbum = QString(), const QString &initialArtist = QString());
     void addToSelectedAlbum();
+    void editSelectedAlbum();
     void editSelectedTrack();
     void removeSelectedTrack();
 
@@ -91,6 +92,7 @@ private:
     QAction *m_actExit = nullptr;
     QAction *m_actAddMusic = nullptr;
     QAction *m_actCreateAlbum = nullptr;
+    QAction *m_actEditAlbum = nullptr;
     QAction *m_actEditTrack = nullptr;
     QAction *m_actRemoveTrack = nullptr;
     QAction *m_actLangEn = nullptr;
@@ -113,6 +115,7 @@ private:
     QGroupBox *m_albumsGroup = nullptr;
     QListWidget *m_albumList = nullptr;
     QPushButton *m_addToAlbumBtn = nullptr;
+    QPushButton *m_editAlbumBtn = nullptr;
 
     // Right pane
     QGroupBox *m_libraryGroup = nullptr;

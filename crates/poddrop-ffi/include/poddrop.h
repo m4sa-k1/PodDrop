@@ -62,6 +62,16 @@ typedef struct {
     int32_t clear_artwork;
 } PodDropUpdateRequest;
 
+typedef struct {
+    const char *old_album;
+    const char *new_album;
+    const char *new_artist;
+    const char *new_genre;
+    int32_t year; /* -1 to skip */
+    const char *artwork_path;
+    int32_t clear_artwork;
+} PodDropUpdateAlbumRequest;
+
 const char *poddrop_app_version(void);
 char *poddrop_discover_first_ipod(void);
 int32_t poddrop_inspect_device(const char *mount_path, PodDropDeviceInfo *out_info, char **out_err);
@@ -77,6 +87,12 @@ int32_t poddrop_update_track(
     const char *mount_path,
     uint64_t track_id,
     const PodDropUpdateRequest *req,
+    char **out_err
+);
+int32_t poddrop_update_album(
+    const char *mount_path,
+    const PodDropUpdateAlbumRequest *req,
+    uint32_t *out_updated_count,
     char **out_err
 );
 int32_t poddrop_remove_track(const char *mount_path, uint64_t track_id, char **out_err);

@@ -216,3 +216,108 @@ std::optional<TrackEditResult> runTrackEditorDialog(
         clearArtwork,
     };
 }
+
+std::optional<AlbumEditResult> runAlbumEditorDialog(
+    QWidget *parent,
+    UiLang lang,
+    const AlbumInfoSummary &albumInfo,
+    bool canWrite
+) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(albumInfo.album);
+    dlg.setMinimumWidth(460);
+
+    auto *albumEdit = new QLineEdit(albumInfo.album, &dlg);
+    auto *artistEdit = new QLineEdit(albumInfo.artist, &dlg);
+    auto *genreEdit = new QLineEdit(albumInfo.genre, &dlg);
+    auto *yearEdit = new QLineEdit(albumInfo.year > 0 ? QString::number(albumInfo.year) : QString(), &dlg);
+    yearEdit->setValidator(new QIntValidator(0, 9999, yearEdit));
+
+    for (auto *e : {albumEdit, artistEdit, genreEdit, yearEdit}) {
+        e->setReadOnly(!canWrite);
+    }
+
+    bool clearArtwork = false;
+    QString selectedCover;
+    auto *coverEdit = new QLineEdit(
+        albumInfo.hasArtwork ? trText(lang, "dlg.cover_keep") : QStringLiteral("-"),
+        &dlg
+    );
+    coverEdit->setReadOnly(true);
+    auto *browseBtn = new QPushButton(trText(lang, "dlg.browse"), &dlg);
+    auto *removeCoverBtn = new QPushButton(trText(lang, "dlg.cover_remove"), &dlg);
+    browseBtn->setEnabled(canWrite);
+    removeCoverBtn->setEnabled(canWrite);
+
+    auto *coverRow = new QHBoxLayout();
+    coverRow->addWidget(coverEdit, 1);
+    coverRow->addWidget(browseBtn);
+    coverRow->addWidget(removeCoverBtn);
+
+    const uint64_t sec = albumInfo.totalDurationMs / 1000;
+    const double sizeMb = static_cast<double>(albumInfo.totalSizeBytes) / (1024.0 * 1024.0);
+    auto *detailsLbl = new QLabel(
+        QString("%1 tracks  |  %2:%3  |  %4 MB")
+            .arg(albumInfo.trackCount)
+            .arg(sec / 60)
+            .arg(sec % 60, 2, 10, QChar('0'))
+            .arg(sizeMb, 0, 'f', 2),
+        &dlg
+    );
+
+    auto *form = new QFormLayout();
+    form->addRow(trText(lang, "dlg.album_name"), albumEdit);
+    form->addRow(trText(lang, "dlg.artist_name"), artistEdit);
+    form->addRow(trText(lang, "dlg.genre"), genreEdit);
+    form->addRow(trText(lang, "dlg.year"), yearEdit);
+    form->addRow(trText(lang, "dlg.cover"), coverRow);
+    form->addRow(trText(lang, "dlg.details"), detailsLbl);
+
+    auto *buttons = new QDialogButtonBox(
+        canWrite ? (QDialogButtonBox::Ok | QDialogButtonBox::Cancel) : QDialogButtonBox::Close,
+        &dlg
+    );
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addLayout(form);
+    root->addWidget(buttons);
+
+    QObject::connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
+        const QString file = QFileDialog::getOpenFileName(
+            &dlg,
+            trText(lang, "dlg.cover"),
+            QString(),
+            "Images (*.png *.jpg *.jpeg)"
+        );
+        if (!file.isEmpty()) {
+            selectedCover = file;
+            clearArtwork = false;
+            coverEdit->setText(file);
+        }
+    });
+
+    QObject::connect(removeCoverBtn, &QPushButton::clicked, &dlg, [&]() {
+        selectedCover.clear();
+        clearArtwork = true;
+        coverEdit->setText(trText(lang, "dlg.cover_remove"));
+    });
+
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted || !canWrite) {
+        return std::nullopt;
+    }
+
+    bool okYear = false;
+    const int yr = yearEdit->text().trimmed().toInt(&okYear);
+
+    return AlbumEditResult{
+        albumEdit->text(),
+        artistEdit->text(),
+        genreEdit->text(),
+        okYear ? yr : 0,
+        selectedCover,
+        clearArtwork,
+    };
+}

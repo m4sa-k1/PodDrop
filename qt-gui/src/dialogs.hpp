@@ -42,6 +42,26 @@ struct TrackEditResult {
     bool clearArtwork = false;
 };
 
+struct AlbumInfoSummary {
+    QString album;
+    QString artist;
+    QString genre;
+    uint32_t year = 0;
+    int trackCount = 0;
+    uint64_t totalDurationMs = 0;
+    uint64_t totalSizeBytes = 0;
+    bool hasArtwork = false;
+};
+
+struct AlbumEditResult {
+    QString newAlbum;
+    QString newArtist;
+    QString newGenre;
+    int32_t year = -1;
+    QString coverPath;
+    bool clearArtwork = false;
+};
+
 std::optional<AlbumBatchInput> runCreateAlbumDialog(
     QWidget *parent,
     UiLang lang,
@@ -53,5 +73,12 @@ std::optional<TrackEditResult> runTrackEditorDialog(
     QWidget *parent,
     UiLang lang,
     const TrackItem &track,
+    bool canWrite
+);
+
+std::optional<AlbumEditResult> runAlbumEditorDialog(
+    QWidget *parent,
+    UiLang lang,
+    const AlbumInfoSummary &albumInfo,
     bool canWrite
 );

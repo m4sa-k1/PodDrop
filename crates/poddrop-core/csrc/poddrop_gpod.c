@@ -474,3 +474,94 @@ int poddrop_statvfs(const char *path, uint64_t *out_total_bytes, uint64_t *out_f
     *out_free_bytes = (uint64_t)st.f_bavail * bsize;
     return 0;
 }
+
+typedef struct {
+    const char *old_album;
+    const char *new_album;
+    const char *new_artist;
+    const char *new_genre;
+    int32_t year;
+    const char *artwork_path;
+    int32_t clear_artwork;
+} PodDropGpodUpdateAlbumRequest;
+
+int poddrop_gpod_update_album(
+    const char *mount_path,
+    const PodDropGpodUpdateAlbumRequest *req,
+    uint32_t *out_updated_count,
+    char **out_err
+) {
+    if (!mount_path || !req || !req->old_album) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    uint32_t updated = 0;
+    const gboolean is_unknown_target = (strcmp(req->old_album, "Unknown Album") == 0);
+
+    for (GList *l = itdb->tracks; l != NULL; l = l->next) {
+        Itdb_Track *track = (Itdb_Track *)l->data;
+        if (!track) continue;
+
+        const char *cur_alb = track->album ? track->album : "";
+        const gboolean matched =
+            (strcmp(cur_alb, req->old_album) == 0) ||
+            (is_unknown_target && cur_alb[0] == '\0');
+        if (!matched) continue;
+
+        if (req->new_album) {
+            g_free(track->album);
+            track->album = g_strdup(req->new_album);
+        }
+        if (req->new_artist) {
+            g_free(track->artist);
+            track->artist = g_strdup(req->new_artist);
+        }
+        if (req->new_genre) {
+            g_free(track->genre);
+            track->genre = g_strdup(req->new_genre);
+        }
+        if (req->year >= 0) {
+            track->year = req->year;
+        }
+
+        if (req->clear_artwork) {
+            itdb_track_remove_thumbnails(track);
+        } else if (req->artwork_path && req->artwork_path[0] != '\0') {
+            if (itdb->device && itdb_device_supports_artwork(itdb->device)) {
+                itdb_track_remove_thumbnails(track);
+                if (!itdb_track_set_thumbnails(track, req->artwork_path)) {
+                    if (out_err) *out_err = g_strdup("Failed to update album cover art");
+                    itdb_free(itdb);
+                    return -1;
+                }
+            }
+        }
+        updated++;
+    }
+
+    if (updated > 0 && !itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (out_updated_count) {
+        *out_updated_count = updated;
+    }
+    itdb_free(itdb);
+    return 0;
+}

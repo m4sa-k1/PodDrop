@@ -46,6 +46,18 @@ pub struct UpdateTrackRequest {
     pub clear_artwork: bool,
 }
 
+/// Request payload for batch-updating all tracks in an album on an iPod.
+#[derive(Debug, Clone, Default)]
+pub struct UpdateAlbumRequest {
+    pub old_album: String,
+    pub new_album: Option<String>,
+    pub new_artist: Option<String>,
+    pub new_genre: Option<String>,
+    pub year: Option<u32>,
+    pub artwork_path: Option<PathBuf>,
+    pub clear_artwork: bool,
+}
+
 /// Result of transferring a track to an iPod.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TransferTrackResult {
@@ -77,5 +89,6 @@ pub trait IpodBackend {
         track_id: u64,
         request: &UpdateTrackRequest,
     ) -> Result<()>;
+    fn update_album(&self, mount_path: &Path, request: &UpdateAlbumRequest) -> Result<u32>;
     fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()>;
 }
