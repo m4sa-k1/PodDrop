@@ -29,6 +29,7 @@ typedef struct {
     uint64_t id;
     char *title;
     char *artist;
+    char *album_artist;
     char *album;
     char *genre;
     uint32_t track_number;
@@ -70,6 +71,10 @@ typedef struct {
     int32_t year; /* -1 to skip */
     const char *artwork_path;
     int32_t clear_artwork;
+    int32_t apply_artist_to_tracks;
+    int32_t apply_genre_to_tracks;
+    int32_t apply_year_to_tracks;
+    int32_t apply_artwork_to_tracks;
 } PodDropUpdateAlbumRequest;
 
 typedef struct {
@@ -102,6 +107,13 @@ int32_t poddrop_update_album(
     const char *mount_path,
     const PodDropUpdateAlbumRequest *req,
     uint32_t *out_updated_count,
+    char **out_err
+);
+int32_t poddrop_remove_album(
+    const char *mount_path,
+    const char *album_name,
+    int32_t delete_tracks,
+    uint32_t *out_affected_count,
     char **out_err
 );
 int32_t poddrop_remove_track(const char *mount_path, uint64_t track_id, char **out_err);

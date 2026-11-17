@@ -1,5 +1,6 @@
 #include "dialogs.hpp"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -8,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QRadioButton>
 #include <QVBoxLayout>
 
 #include "poddrop.h"
@@ -297,13 +299,37 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
 
     auto *albumEdit = new QLineEdit(albumInfo.album, &dlg);
     auto *artistEdit = new QLineEdit(albumInfo.artist, &dlg);
+    auto *applyArtistChk = new QCheckBox(trText(lang, "dlg.apply_artist_tracks"), &dlg);
+    applyArtistChk->setChecked(false);
+    applyArtistChk->setEnabled(canWrite);
+
     auto *genreEdit = new QLineEdit(albumInfo.genre, &dlg);
+    auto *applyGenreChk = new QCheckBox(trText(lang, "dlg.apply_genre_tracks"), &dlg);
+    applyGenreChk->setChecked(false);
+    applyGenreChk->setEnabled(canWrite);
+
     auto *yearEdit = new QLineEdit(albumInfo.year > 0 ? QString::number(albumInfo.year) : QString(), &dlg);
     yearEdit->setValidator(new QIntValidator(0, 9999, yearEdit));
+    auto *applyYearChk = new QCheckBox(trText(lang, "dlg.apply_year_tracks"), &dlg);
+    applyYearChk->setChecked(false);
+    applyYearChk->setEnabled(canWrite);
 
     for (auto *e : {albumEdit, artistEdit, genreEdit, yearEdit}) {
         e->setReadOnly(!canWrite);
     }
+
+    auto *artistBox = new QVBoxLayout();
+    artistBox->setSpacing(3);
+    artistBox->addWidget(artistEdit);
+    artistBox->addWidget(applyArtistChk);
+
+    auto *genreRow = new QHBoxLayout();
+    genreRow->addWidget(genreEdit, 1);
+    genreRow->addWidget(applyGenreChk);
+
+    auto *yearRow = new QHBoxLayout();
+    yearRow->addWidget(yearEdit, 1);
+    yearRow->addWidget(applyYearChk);
 
     bool clearArtwork = false;
     QString selectedCover;
@@ -317,10 +343,19 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     browseBtn->setEnabled(canWrite);
     removeCoverBtn->setEnabled(canWrite);
 
+    auto *applyCoverChk = new QCheckBox(trText(lang, "dlg.apply_cover_tracks"), &dlg);
+    applyCoverChk->setChecked(true);
+    applyCoverChk->setEnabled(canWrite);
+
     auto *coverRow = new QHBoxLayout();
     coverRow->addWidget(coverEdit, 1);
     coverRow->addWidget(browseBtn);
     coverRow->addWidget(removeCoverBtn);
+
+    auto *coverBox = new QVBoxLayout();
+    coverBox->setSpacing(3);
+    coverBox->addLayout(coverRow);
+    coverBox->addWidget(applyCoverChk);
 
     const uint64_t sec = albumInfo.totalDurationMs / 1000;
     const double sizeMb = static_cast<double>(albumInfo.totalSizeBytes) / (1024.0 * 1024.0);
@@ -335,10 +370,10 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
 
     auto *form = new QFormLayout();
     form->addRow(trText(lang, "dlg.album_name"), albumEdit);
-    form->addRow(trText(lang, "dlg.artist_name"), artistEdit);
-    form->addRow(trText(lang, "dlg.genre"), genreEdit);
-    form->addRow(trText(lang, "dlg.year"), yearEdit);
-    form->addRow(trText(lang, "dlg.cover"), coverRow);
+    form->addRow(trText(lang, "dlg.artist_name"), artistBox);
+    form->addRow(trText(lang, "dlg.genre"), genreRow);
+    form->addRow(trText(lang, "dlg.year"), yearRow);
+    form->addRow(trText(lang, "dlg.cover"), coverBox);
     form->addRow(trText(lang, "dlg.details"), detailsLbl);
 
     auto *topRow = new QHBoxLayout();
@@ -393,6 +428,10 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
         okYear ? yr : 0,
         selectedCover,
         clearArtwork,
+        applyArtistChk->isChecked(),
+        applyGenreChk->isChecked(),
+        applyYearChk->isChecked(),
+        applyCoverChk->isChecked(),
     };
 }
 
@@ -438,4 +477,40 @@ void showSystemInfoDialog(QWidget *parent, UiLang lang) {
     root->addLayout(form);
     root->addWidget(buttons);
     dlg.exec();
+}
+
+std::optional<bool> runRemoveAlbumDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QString &albumName,
+    int trackCount
+) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(trText(lang, "act.remove_album"));
+    dlg.setMinimumWidth(420);
+
+    auto *msgLbl = new QLabel(
+        trText(lang, "dlg.remove_album_msg").arg(albumName).arg(trackCount),
+        &dlg
+    );
+    msgLbl->setWordWrap(true);
+
+    auto *rbAlbumOnly = new QRadioButton(trText(lang, "dlg.remove_album_only"), &dlg);
+    auto *rbWithTracks = new QRadioButton(trText(lang, "dlg.remove_album_with_tracks"), &dlg);
+    rbAlbumOnly->setChecked(true);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addWidget(msgLbl);
+    root->addWidget(rbAlbumOnly);
+    root->addWidget(rbWithTracks);
+    root->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        return std::nullopt;
+    }
+    return rbWithTracks->isChecked();
 }

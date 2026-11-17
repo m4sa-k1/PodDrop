@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Album editor scope checkboxes to choose per field (`Artist`, `Genre`, `Year`, `Cover`) whether edits apply only to the album (`albumartist` / album grouping) or also overwrite the tracks inside.
+- Album removal (`Remove Album`) with a choice to either delete the album only (releasing tracks by clearing their album metadata) or delete the album along with all tracks inside.
+
 ## [0.1.1] - 2026-11-17
 
 ### Added

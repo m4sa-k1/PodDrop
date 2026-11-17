@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=PodDrop
+GenericName=Classic iPod Manager
+GenericName[ja]=クラシック iPod 管理ツール
+Comment=Lightweight music and cover artwork manager for classic iPods
+Comment[ja]=クラシック系 iPod 向け軽量音楽・カバー画像管理ツール
+Exec=poddrop-gui
+Icon=io.github.m4sa_k1.PodDrop
+Terminal=false
+Categories=AudioVideo;Audio;Qt;
+Keywords=ipod;music;mp3;itunesdb;artwork;
+StartupNotify=true

@@ -13,6 +13,7 @@ struct TrackItem {
     uint64_t id = 0;
     QString title;
     QString artist;
+    QString albumArtist;
     QString album;
     QString genre;
     uint32_t trackNumber = 0;
@@ -61,6 +62,10 @@ struct AlbumEditResult {
     int32_t year = -1;
     QString coverPath;
     bool clearArtwork = false;
+    bool applyArtistToTracks = false;
+    bool applyGenreToTracks = false;
+    bool applyYearToTracks = false;
+    bool applyArtworkToTracks = true;
 };
 
 QPixmap loadTrackCoverPixmap(const QString &mountPath, uint64_t trackId);
@@ -86,6 +91,14 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     const AlbumInfoSummary &albumInfo,
     const QPixmap &currentCover,
     bool canWrite
+);
+
+/// Returns std::nullopt if cancelled, false for album-only removal, true for deleting tracks too.
+std::optional<bool> runRemoveAlbumDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QString &albumName,
+    int trackCount
 );
 
 void showSystemInfoDialog(QWidget *parent, UiLang lang);

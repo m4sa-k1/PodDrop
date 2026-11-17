@@ -25,6 +25,7 @@ typedef struct {
     uint64_t id;
     char *title;
     char *artist;
+    char *album_artist;
     char *album;
     char *genre;
     int32_t track_number;
@@ -57,6 +58,7 @@ void poddrop_gpod_free_tracks(PodDropGpodTrack *tracks, size_t count) {
     for (size_t i = 0; i < count; ++i) {
         g_free(tracks[i].title);
         g_free(tracks[i].artist);
+        g_free(tracks[i].album_artist);
         g_free(tracks[i].album);
         g_free(tracks[i].genre);
     }
@@ -146,6 +148,7 @@ int poddrop_gpod_list_tracks(
         arr[idx].id = (uint64_t)tr->id;
         arr[idx].title = dup_cstr_or_empty(tr->title);
         arr[idx].artist = dup_cstr_or_empty(tr->artist);
+        arr[idx].album_artist = dup_cstr_or_empty(tr->albumartist);
         arr[idx].album = dup_cstr_or_empty(tr->album);
         arr[idx].genre = dup_cstr_or_empty(tr->genre);
         arr[idx].track_number = tr->track_nr;
@@ -484,6 +487,10 @@ typedef struct {
     int32_t year;
     const char *artwork_path;
     int32_t clear_artwork;
+    int32_t apply_artist_to_tracks;
+    int32_t apply_genre_to_tracks;
+    int32_t apply_year_to_tracks;
+    int32_t apply_artwork_to_tracks;
 } PodDropGpodUpdateAlbumRequest;
 
 int poddrop_gpod_update_album(
@@ -525,26 +532,34 @@ int poddrop_gpod_update_album(
             track->album = g_strdup(req->new_album);
         }
         if (req->new_artist) {
-            g_free(track->artist);
-            track->artist = g_strdup(req->new_artist);
+            g_free(track->albumartist);
+            track->albumartist = g_strdup(req->new_artist);
+            if (req->apply_artist_to_tracks) {
+                g_free(track->artist);
+                track->artist = g_strdup(req->new_artist);
+            }
         }
-        if (req->new_genre) {
+        if (req->new_genre && req->apply_genre_to_tracks) {
             g_free(track->genre);
             track->genre = g_strdup(req->new_genre);
         }
-        if (req->year >= 0) {
+        if (req->year >= 0 && req->apply_year_to_tracks) {
             track->year = req->year;
         }
 
         if (req->clear_artwork) {
-            itdb_track_remove_thumbnails(track);
+            if (req->apply_artwork_to_tracks) {
+                itdb_track_remove_thumbnails(track);
+            }
         } else if (req->artwork_path && req->artwork_path[0] != '\0') {
             if (itdb->device && itdb_device_supports_artwork(itdb->device)) {
-                itdb_track_remove_thumbnails(track);
-                if (!itdb_track_set_thumbnails(track, req->artwork_path)) {
-                    if (out_err) *out_err = g_strdup("Failed to update album cover art");
-                    itdb_free(itdb);
-                    return -1;
+                if (req->apply_artwork_to_tracks || !itdb_track_has_thumbnails(track)) {
+                    itdb_track_remove_thumbnails(track);
+                    if (!itdb_track_set_thumbnails(track, req->artwork_path)) {
+                        if (out_err) *out_err = g_strdup("Failed to update album cover art");
+                        itdb_free(itdb);
+                        return -1;
+                    }
                 }
             }
         }
@@ -624,5 +639,90 @@ int poddrop_gpod_get_track_artwork_png(
 
     *out_data = (uint8_t *)png_buf;
     *out_len = (size_t)png_len;
+    return 0;
+}
+
+int poddrop_gpod_remove_album(
+    const char *mount_path,
+    const char *album_name,
+    int32_t delete_tracks,
+    uint32_t *out_affected_count,
+    char **out_err
+) {
+    if (!mount_path || !album_name) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    const gboolean is_unknown_target = (strcmp(album_name, "Unknown Album") == 0);
+    GList *matched_tracks = NULL;
+    for (GList *l = itdb->tracks; l != NULL; l = l->next) {
+        Itdb_Track *track = (Itdb_Track *)l->data;
+        if (!track) continue;
+        const char *cur_alb = track->album ? track->album : "";
+        const gboolean matched =
+            (strcmp(cur_alb, album_name) == 0) ||
+            (is_unknown_target && cur_alb[0] == '\0');
+        if (matched) {
+            matched_tracks = g_list_prepend(matched_tracks, track);
+        }
+    }
+
+    uint32_t affected = 0;
+    GList *files_to_unlink = NULL;
+
+    for (GList *l = matched_tracks; l != NULL; l = l->next) {
+        Itdb_Track *track = (Itdb_Track *)l->data;
+        if (delete_tracks) {
+            gchar *ipod_file = itdb_filename_on_ipod(track);
+            if (ipod_file) {
+                files_to_unlink = g_list_prepend(files_to_unlink, ipod_file);
+            }
+            for (GList *pl_node = itdb->playlists; pl_node != NULL; pl_node = pl_node->next) {
+                Itdb_Playlist *pl = (Itdb_Playlist *)pl_node->data;
+                if (pl && itdb_playlist_contains_track(pl, track)) {
+                    itdb_playlist_remove_track(pl, track);
+                }
+            }
+            itdb_track_remove(track);
+        } else {
+            g_free(track->album);
+            track->album = g_strdup("");
+            g_free(track->albumartist);
+            track->albumartist = g_strdup("");
+        }
+        affected++;
+    }
+    g_list_free(matched_tracks);
+
+    if (affected > 0 && !itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        g_list_free_full(files_to_unlink, g_free);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    for (GList *f = files_to_unlink; f != NULL; f = f->next) {
+        unlink((const char *)f->data);
+    }
+    g_list_free_full(files_to_unlink, g_free);
+
+    if (out_affected_count) {
+        *out_affected_count = affected;
+    }
+    itdb_free(itdb);
     return 0;
 }

@@ -37,6 +37,7 @@ pub struct PodDropTrack {
     pub id: u64,
     pub title: *mut c_char,
     pub artist: *mut c_char,
+    pub album_artist: *mut c_char,
     pub album: *mut c_char,
     pub genre: *mut c_char,
     pub track_number: u32,
@@ -80,6 +81,10 @@ pub struct PodDropUpdateAlbumRequest {
     pub year: i32,
     pub artwork_path: *const c_char,
     pub clear_artwork: i32,
+    pub apply_artist_to_tracks: i32,
+    pub apply_genre_to_tracks: i32,
+    pub apply_year_to_tracks: i32,
+    pub apply_artwork_to_tracks: i32,
 }
 
 #[repr(C)]
@@ -187,6 +192,7 @@ pub unsafe extern "C" fn poddrop_list_tracks(
                     id: t.id,
                     title: to_c_char(&t.title),
                     artist: to_c_char(&t.artist),
+                    album_artist: to_c_char(&t.album_artist),
                     album: to_c_char(&t.album),
                     genre: to_c_char(&t.genre),
                     track_number: t.track_number.unwrap_or(0),
@@ -343,12 +349,48 @@ pub unsafe extern "C" fn poddrop_update_album(
         year: u32::try_from(r.year).ok(),
         artwork_path: unsafe { cstr_to_opt(r.artwork_path) }.map(PathBuf::from),
         clear_artwork: r.clear_artwork != 0,
+        apply_artist_to_tracks: r.apply_artist_to_tracks != 0,
+        apply_genre_to_tracks: r.apply_genre_to_tracks != 0,
+        apply_year_to_tracks: r.apply_year_to_tracks != 0,
+        apply_artwork_to_tracks: r.apply_artwork_to_tracks != 0,
     };
 
     match LibgpodBackend::new().update_album(Path::new(&mp), &update_req) {
         Ok(cnt) => {
             if !out_updated_count.is_null() {
                 unsafe { *out_updated_count = cnt };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_remove_album(
+    mount_path: *const c_char,
+    album_name: *const c_char,
+    delete_tracks: i32,
+    out_affected_count: *mut u32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Invalid mount_path");
+        return -1;
+    };
+    let Some(alb) = (unsafe { cstr_to_opt(album_name) }) else {
+        set_err(out_err, "Invalid album_name");
+        return -1;
+    };
+
+    match LibgpodBackend::new().remove_album(Path::new(&mp), &alb, delete_tracks != 0) {
+        Ok(cnt) => {
+            if !out_affected_count.is_null() {
+                unsafe { *out_affected_count = cnt };
             }
             0
         }
@@ -553,6 +595,7 @@ pub unsafe extern "C" fn poddrop_free_tracks(tracks: *mut PodDropTrack, count: u
         unsafe {
             poddrop_free_string(t.title);
             poddrop_free_string(t.artist);
+            poddrop_free_string(t.album_artist);
             poddrop_free_string(t.album);
             poddrop_free_string(t.genre);
         }

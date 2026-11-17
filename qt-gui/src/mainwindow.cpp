@@ -85,6 +85,7 @@ void MainWindow::setupUi() {
     m_actAddMusic = m_editMenu->addAction(st->standardIcon(QStyle::SP_FileDialogNewFolder), QString());
     m_actCreateAlbum = m_editMenu->addAction(st->standardIcon(QStyle::SP_DirIcon), QString());
     m_actEditAlbum = m_editMenu->addAction(QString());
+    m_actRemoveAlbum = m_editMenu->addAction(QString());
     m_editMenu->addSeparator();
     m_actEditTrack = m_editMenu->addAction(QString());
     m_actRemoveTrack = m_editMenu->addAction(st->standardIcon(QStyle::SP_TrashIcon), QString());
@@ -177,10 +178,12 @@ void MainWindow::setupUi() {
     m_albumList->setContextMenuPolicy(Qt::CustomContextMenu);
     m_addToAlbumBtn = new QPushButton(m_albumsGroup);
     m_editAlbumBtn = new QPushButton(m_albumsGroup);
+    m_removeAlbumBtn = new QPushButton(m_albumsGroup);
     auto *albBtnRow = new QHBoxLayout();
-    albBtnRow->addWidget(m_addToAlbumBtn);
     albBtnRow->addWidget(m_editAlbumBtn);
+    albBtnRow->addWidget(m_removeAlbumBtn);
     albLayout->addWidget(m_albumList, 1);
+    albLayout->addWidget(m_addToAlbumBtn);
     albLayout->addLayout(albBtnRow);
 
     leftLayout->addWidget(m_deviceGroup);
@@ -264,6 +267,7 @@ void MainWindow::setupUi() {
     connect(m_actAddMusic, &QAction::triggered, this, &MainWindow::addMusicFiles);
     connect(m_actCreateAlbum, &QAction::triggered, this, [this]() { createAlbum(); });
     connect(m_actEditAlbum, &QAction::triggered, this, &MainWindow::editSelectedAlbum);
+    connect(m_actRemoveAlbum, &QAction::triggered, this, &MainWindow::removeSelectedAlbum);
     connect(m_actEditTrack, &QAction::triggered, this, &MainWindow::editSelectedTrack);
     connect(m_actRemoveTrack, &QAction::triggered, this, &MainWindow::removeSelectedTrack);
 
@@ -293,6 +297,7 @@ void MainWindow::setupUi() {
 
     connect(m_addToAlbumBtn, &QPushButton::clicked, this, &MainWindow::addToSelectedAlbum);
     connect(m_editAlbumBtn, &QPushButton::clicked, this, &MainWindow::editSelectedAlbum);
+    connect(m_removeAlbumBtn, &QPushButton::clicked, this, &MainWindow::removeSelectedAlbum);
     connect(m_editBtn, &QPushButton::clicked, this, &MainWindow::editSelectedTrack);
     connect(m_removeBtn, &QPushButton::clicked, this, &MainWindow::removeSelectedTrack);
 
@@ -314,6 +319,7 @@ void MainWindow::setupUi() {
         if (m_selectedAlbum.isEmpty()) return;
         QMenu menu(this);
         menu.addAction(m_actEditAlbum);
+        menu.addAction(m_actRemoveAlbum);
         menu.exec(m_albumList->viewport()->mapToGlobal(pos));
     });
 
@@ -380,6 +386,7 @@ void MainWindow::applyTranslations() {
     m_actAddMusic->setText(trText(m_lang, "act.add_music"));
     m_actCreateAlbum->setText(trText(m_lang, "act.create_album"));
     m_actEditAlbum->setText(trText(m_lang, "act.edit_album"));
+    m_actRemoveAlbum->setText(trText(m_lang, "act.remove_album"));
     m_actEditTrack->setText(trText(m_lang, "act.edit_track"));
     m_actRemoveTrack->setText(trText(m_lang, "act.remove_track"));
     m_actLangEn->setText(trText(m_lang, "act.lang_en"));
@@ -393,6 +400,7 @@ void MainWindow::applyTranslations() {
     m_libraryGroup->setTitle(trText(m_lang, "grp.library"));
     m_addToAlbumBtn->setText(trText(m_lang, "act.add_to_album"));
     m_editAlbumBtn->setText(trText(m_lang, "act.edit_album"));
+    m_removeAlbumBtn->setText(trText(m_lang, "act.remove_album"));
 
     m_searchEdit->setPlaceholderText(trText(m_lang, "lbl.search_hint"));
     m_editBtn->setText(trText(m_lang, "act.edit_track"));
@@ -477,6 +485,7 @@ void MainWindow::reloadDevice() {
                         t.id,
                         QString::fromUtf8(t.title ? t.title : ""),
                         QString::fromUtf8(t.artist ? t.artist : ""),
+                        QString::fromUtf8(t.album_artist ? t.album_artist : ""),
                         QString::fromUtf8(t.album ? t.album : ""),
                         QString::fromUtf8(t.genre ? t.genre : ""),
                         t.track_number,
@@ -662,6 +671,8 @@ void MainWindow::updateActionStates() {
     m_addToAlbumBtn->setEnabled(canWrite);
     m_actEditAlbum->setEnabled(m_hasDevice && hasAlbumSel && !m_busy);
     m_editAlbumBtn->setEnabled(m_hasDevice && hasAlbumSel && !m_busy);
+    m_actRemoveAlbum->setEnabled(canWrite && hasAlbumSel);
+    m_removeAlbumBtn->setEnabled(canWrite && hasAlbumSel);
     m_actEditTrack->setEnabled(m_hasDevice && hasSel && !m_busy);
     m_editBtn->setEnabled(m_hasDevice && hasSel && !m_busy);
     m_actRemoveTrack->setEnabled(canWrite && hasSel);
@@ -765,7 +776,13 @@ void MainWindow::editSelectedAlbum() {
         summary.trackCount++;
         summary.totalDurationMs += t.durationMs;
         summary.totalSizeBytes += t.sizeBytes;
-        if (summary.artist.isEmpty() && !t.artist.isEmpty()) summary.artist = t.artist;
+        if (summary.artist.isEmpty()) {
+            if (!t.albumArtist.isEmpty()) {
+                summary.artist = t.albumArtist;
+            } else if (!t.artist.isEmpty()) {
+                summary.artist = t.artist;
+            }
+        }
         if (summary.genre.isEmpty() && !t.genre.isEmpty()) summary.genre = t.genre;
         if (summary.year == 0 && t.year > 0) summary.year = t.year;
         if (t.hasArtwork) {
@@ -804,6 +821,10 @@ void MainWindow::editSelectedAlbum() {
         req.year = edit.year;
         req.artwork_path = coverB.isEmpty() ? nullptr : coverB.constData();
         req.clear_artwork = edit.clearArtwork ? 1 : 0;
+        req.apply_artist_to_tracks = edit.applyArtistToTracks ? 1 : 0;
+        req.apply_genre_to_tracks = edit.applyGenreToTracks ? 1 : 0;
+        req.apply_year_to_tracks = edit.applyYearToTracks ? 1 : 0;
+        req.apply_artwork_to_tracks = edit.applyArtworkToTracks ? 1 : 0;
 
         uint32_t updated = 0;
         char *err = nullptr;
@@ -821,6 +842,59 @@ void MainWindow::editSelectedAlbum() {
                 if (rc == 0) {
                     m_selectedAlbum = nextSelected;
                     m_statusMsg = QString("%1 (%2)").arg(trText(m_lang, "lbl.album_updated")).arg(updated);
+                } else {
+                    m_statusMsg = errMsg;
+                }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::removeSelectedAlbum() {
+    if (!m_hasDevice || m_device.isReadOnly || m_busy || m_selectedAlbum.isEmpty()) return;
+
+    int count = 0;
+    for (const auto &t : m_tracks) {
+        const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
+        if (alb == m_selectedAlbum) count++;
+    }
+    if (count == 0) return;
+
+    const auto modeOpt = runRemoveAlbumDialog(this, m_lang, m_selectedAlbum, count);
+    if (!modeOpt.has_value()) return;
+    const bool deleteTracks = *modeOpt;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const QString albumTarget = m_selectedAlbum;
+
+    std::thread([this, mp, albumTarget, deleteTracks]() {
+        const QByteArray albB = albumTarget.toUtf8();
+        uint32_t affected = 0;
+        char *err = nullptr;
+        const int32_t rc = poddrop_remove_album(
+            mp.constData(),
+            albB.constData(),
+            deleteTracks ? 1 : 0,
+            &affected,
+            &err
+        );
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg, affected]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                if (rc == 0) {
+                    m_selectedAlbum.clear();
+                    m_statusMsg = QString("%1 (%2)").arg(trText(m_lang, "lbl.album_removed")).arg(affected);
                 } else {
                     m_statusMsg = errMsg;
                 }

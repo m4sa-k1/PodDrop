@@ -10,6 +10,7 @@ pub struct TrackMetadata {
     pub id: u64,
     pub title: String,
     pub artist: String,
+    pub album_artist: String,
     pub album: String,
     pub genre: String,
     pub track_number: Option<u32>,
@@ -56,6 +57,10 @@ pub struct UpdateAlbumRequest {
     pub year: Option<u32>,
     pub artwork_path: Option<PathBuf>,
     pub clear_artwork: bool,
+    pub apply_artist_to_tracks: bool,
+    pub apply_genre_to_tracks: bool,
+    pub apply_year_to_tracks: bool,
+    pub apply_artwork_to_tracks: bool,
 }
 
 /// Result of transferring a track to an iPod.
@@ -90,6 +95,8 @@ pub trait IpodBackend {
         request: &UpdateTrackRequest,
     ) -> Result<()>;
     fn update_album(&self, mount_path: &Path, request: &UpdateAlbumRequest) -> Result<u32>;
+    fn remove_album(&self, mount_path: &Path, album_name: &str, delete_tracks: bool)
+        -> Result<u32>;
     fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()>;
     fn get_track_artwork_png(&self, mount_path: &Path, track_id: u64) -> Result<Option<Vec<u8>>>;
 }

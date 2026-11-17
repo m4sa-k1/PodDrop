@@ -29,6 +29,7 @@ struct PodDropGpodTrack {
     id: u64,
     title: *mut c_char,
     artist: *mut c_char,
+    album_artist: *mut c_char,
     album: *mut c_char,
     genre: *mut c_char,
     track_number: i32,
@@ -76,6 +77,10 @@ struct PodDropGpodUpdateAlbumRequest {
     year: i32,
     artwork_path: *const c_char,
     clear_artwork: i32,
+    apply_artist_to_tracks: i32,
+    apply_genre_to_tracks: i32,
+    apply_year_to_tracks: i32,
+    apply_artwork_to_tracks: i32,
 }
 
 extern "C" {
@@ -121,6 +126,13 @@ extern "C" {
         mount_path: *const c_char,
         req: *const PodDropGpodUpdateAlbumRequest,
         out_updated_count: *mut u32,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_remove_album(
+        mount_path: *const c_char,
+        album_name: *const c_char,
+        delete_tracks: c_int,
+        out_affected_count: *mut u32,
         out_err: *mut *mut c_char,
     ) -> c_int;
     fn poddrop_statvfs(
@@ -253,6 +265,7 @@ impl IpodBackend for LibgpodBackend {
                     id: item.id,
                     title: unsafe { cstr_to_string(item.title) },
                     artist: unsafe { cstr_to_string(item.artist) },
+                    album_artist: unsafe { cstr_to_string(item.album_artist) },
                     album: unsafe { cstr_to_string(item.album) },
                     genre: unsafe { cstr_to_string(item.genre) },
                     track_number: u32::try_from(item.track_number).ok().filter(|&n| n > 0),
@@ -477,6 +490,10 @@ impl IpodBackend for LibgpodBackend {
             year: request.year.map_or(-1, |v| v as i32),
             artwork_path: c_art.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
             clear_artwork: i32::from(request.clear_artwork),
+            apply_artist_to_tracks: i32::from(request.apply_artist_to_tracks),
+            apply_genre_to_tracks: i32::from(request.apply_genre_to_tracks),
+            apply_year_to_tracks: i32::from(request.apply_year_to_tracks),
+            apply_artwork_to_tracks: i32::from(request.apply_artwork_to_tracks),
         };
 
         let mut updated: u32 = 0;
@@ -488,6 +505,39 @@ impl IpodBackend for LibgpodBackend {
             return Err(PodDropError::Backend(take_c_error(err_ptr)));
         }
         Ok(updated)
+    }
+
+    fn remove_album(
+        &self,
+        mount_path: &Path,
+        album_name: &str,
+        delete_tracks: bool,
+    ) -> Result<u32> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_album = str_to_cstring(album_name)?;
+        let mut affected: u32 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+
+        let rc = unsafe {
+            poddrop_gpod_remove_album(
+                c_mount.as_ptr(),
+                c_album.as_ptr(),
+                i32::from(delete_tracks),
+                &mut affected,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(affected)
     }
 
     fn get_track_artwork_png(&self, mount_path: &Path, track_id: u64) -> Result<Option<Vec<u8>>> {
