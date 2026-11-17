@@ -9,7 +9,7 @@ use poddrop_core::backend::{
     IpodBackend, TransferTrackRequest, UpdateAlbumRequest, UpdateTrackRequest,
 };
 use poddrop_core::backup::default_backup_root;
-use poddrop_core::gpod::{discover_mounted_ipods, eject_ipod, LibgpodBackend};
+use poddrop_core::gpod::{discover_or_mount_ipods, eject_ipod, LibgpodBackend};
 use poddrop_core::media::TranscodeFormat;
 use poddrop_core::APP_VERSION;
 
@@ -91,7 +91,7 @@ pub extern "C" fn poddrop_app_version() -> *const c_char {
 
 #[no_mangle]
 pub extern "C" fn poddrop_discover_first_ipod() -> *mut c_char {
-    match discover_mounted_ipods().into_iter().next() {
+    match discover_or_mount_ipods().into_iter().next() {
         Some(p) => to_c_char(&p.to_string_lossy()),
         None => ptr::null_mut(),
     }

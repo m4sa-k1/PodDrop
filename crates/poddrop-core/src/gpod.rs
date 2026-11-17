@@ -725,6 +725,52 @@ pub fn discover_mounted_ipods() -> Vec<PathBuf> {
     found
 }
 
+/// Discovers mounted iPods; if none are mounted yet, attempts to auto-mount
+/// unmounted Apple iPod partitions found under `/dev/disk/by-id/` via `udisksctl`.
+pub fn discover_or_mount_ipods() -> Vec<PathBuf> {
+    let mounted = discover_mounted_ipods();
+    if !mounted.is_empty() {
+        return mounted;
+    }
+
+    let Ok(entries) = fs::read_dir("/dev/disk/by-id") else {
+        return Vec::new();
+    };
+    let mut candidates: Vec<PathBuf> = entries
+        .filter_map(|e| e.ok())
+        .filter_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            if name.starts_with("usb-Apple_iPod_") && name.contains("-part") {
+                fs::canonicalize(e.path()).ok()
+            } else {
+                None
+            }
+        })
+        .collect();
+    candidates.sort();
+    candidates.dedup();
+
+    for dev in candidates {
+        let fstype_ok = std::process::Command::new("lsblk")
+            .args(["-no", "FSTYPE"])
+            .arg(&dev)
+            .output()
+            .ok()
+            .filter(|o| o.status.success())
+            .map(|o| !String::from_utf8_lossy(&o.stdout).trim().is_empty())
+            .unwrap_or(false);
+        if !fstype_ok {
+            continue;
+        }
+        let _ = std::process::Command::new("udisksctl")
+            .args(["mount", "-b"])
+            .arg(&dev)
+            .output();
+    }
+
+    discover_mounted_ipods()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

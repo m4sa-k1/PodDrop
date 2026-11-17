@@ -4,6 +4,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QComboBox>
+#include <QDir>
 #include <QDragEnterEvent>
 #include <QDropEvent>
 #include <QFileDialog>
@@ -247,7 +248,8 @@ void MainWindow::setupUi() {
     // Connections
     connect(m_actOpen, &QAction::triggered, this, &MainWindow::openMountFolder);
     connect(m_actRefresh, &QAction::triggered, this, [this]() {
-        if (m_mountPath.isEmpty()) {
+        if (m_mountPath.isEmpty() || !QDir(m_mountPath).exists()) {
+            m_mountPath.clear();
             if (char *detected = poddrop_discover_first_ipod()) {
                 m_mountPath = takeCString(detected);
             }

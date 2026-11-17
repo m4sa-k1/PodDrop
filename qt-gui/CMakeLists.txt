@@ -57,3 +57,6 @@ install(FILES "${WORKSPACE_ROOT}/packaging/io.github.m4sa_k1.PodDrop.desktop"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
 install(FILES "${WORKSPACE_ROOT}/packaging/io.github.m4sa_k1.PodDrop.svg"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/resources/poddrop.png"
+    RENAME "io.github.m4sa_k1.PodDrop.png"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/128x128/apps")
