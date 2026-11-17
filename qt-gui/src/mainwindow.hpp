@@ -8,6 +8,7 @@
 #include "i18n.hpp"
 
 class QAction;
+class QCheckBox;
 class QComboBox;
 class QGroupBox;
 class QLabel;
@@ -139,6 +140,7 @@ private:
     QProgressBar *m_storageBar = nullptr;
     QTabWidget *m_navTabs = nullptr;
     QWidget *m_albumsTab = nullptr;
+    QCheckBox *m_hideSinglesChk = nullptr;
     QListWidget *m_albumList = nullptr;
     QPushButton *m_addToAlbumBtn = nullptr;
     QPushButton *m_editAlbumBtn = nullptr;

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- `Hide Singles` checkbox in the Albums tab (UI-only filter, does not modify the iPod) that hides albums containing `Single` in the name or having 1–2 non-instrumental tracks (with at most 4 total tracks).
+
 ## [0.1.6] - 2026-11-17
 
 ### Added

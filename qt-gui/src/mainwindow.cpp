@@ -4,6 +4,7 @@
 #include <QAction>
 #include <QActionGroup>
 #include <QApplication>
+#include <QCheckBox>
 #include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
@@ -170,6 +171,7 @@ void MainWindow::setupUi() {
     m_albumsTab = new QWidget(m_navTabs);
     auto *albLayout = new QVBoxLayout(m_albumsTab);
     albLayout->setContentsMargins(6, 6, 6, 6);
+    m_hideSinglesChk = new QCheckBox(m_albumsTab);
     m_albumList = new QListWidget(m_albumsTab);
     m_albumList->setContextMenuPolicy(Qt::CustomContextMenu);
     m_addToAlbumBtn = new QPushButton(m_albumsTab);
@@ -178,6 +180,7 @@ void MainWindow::setupUi() {
     auto *albBtnRow = new QHBoxLayout();
     albBtnRow->addWidget(m_editAlbumBtn);
     albBtnRow->addWidget(m_removeAlbumBtn);
+    albLayout->addWidget(m_hideSinglesChk);
     albLayout->addWidget(m_albumList, 1);
     albLayout->addWidget(m_addToAlbumBtn);
     albLayout->addLayout(albBtnRow);
@@ -335,6 +338,10 @@ void MainWindow::setupUi() {
     connect(m_navTabs, &QTabWidget::currentChanged, this, [this](int) {
         populateTracks();
     });
+    connect(m_hideSinglesChk, &QCheckBox::toggled, this, [this](bool) {
+        populateAlbums();
+        populateTracks();
+    });
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() { populateTracks(); });
     connect(m_albumList, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row <= 0) {
@@ -476,6 +483,7 @@ void MainWindow::applyTranslations() {
     m_deviceGroup->setTitle(trText(m_lang, "grp.device"));
     m_navTabs->setTabText(0, trText(m_lang, "grp.albums"));
     m_navTabs->setTabText(1, trText(m_lang, "grp.playlists"));
+    m_hideSinglesChk->setText(trText(m_lang, "chk.hide_singles"));
     m_libraryGroup->setTitle(trText(m_lang, "grp.library"));
     m_addToAlbumBtn->setText(trText(m_lang, "act.add_to_album"));
     m_editAlbumBtn->setText(trText(m_lang, "act.edit_album"));
@@ -647,11 +655,35 @@ void MainWindow::reloadDevice() {
 }
 
 void MainWindow::populateAlbums() {
-    std::map<QString, int> counts;
+    struct AlbumCounts {
+        int total = 0;
+        int nonInst = 0;
+    };
+    auto isInstrumentalTitle = [](const QString &title) -> bool {
+        const QString lower = title.toLower();
+        return lower.contains("instrumental") ||
+               lower.contains("inst.") ||
+               lower.contains("off vocal") ||
+               lower.contains("karaoke") ||
+               title.contains(QStringLiteral("カラオケ"));
+    };
+
+    std::map<QString, AlbumCounts> counts;
     for (const auto &t : m_tracks) {
         const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
-        counts[alb]++;
+        auto &entry = counts[alb];
+        entry.total++;
+        if (!isInstrumentalTitle(t.title)) {
+            entry.nonInst++;
+        }
     }
+
+    const bool hideSingles = m_hideSinglesChk && m_hideSinglesChk->isChecked();
+    auto isSingleAlbum = [&](const QString &alb, const AlbumCounts &c) -> bool {
+        if (alb == QStringLiteral("Unknown Album")) return false;
+        if (alb.toLower().contains("single")) return true;
+        return c.total > 0 && c.total <= 4 && c.nonInst <= 2;
+    };
 
     m_albumList->blockSignals(true);
     m_albumList->clear();
@@ -665,7 +697,10 @@ void MainWindow::populateAlbums() {
     int selectRow = 0;
     int rowIdx = 1;
     for (const auto &[alb, cnt] : counts) {
-        auto *item = new QListWidgetItem(QString("%1 (%2)").arg(alb).arg(cnt));
+        if (hideSingles && isSingleAlbum(alb, cnt)) {
+            continue;
+        }
+        auto *item = new QListWidgetItem(QString("%1 (%2)").arg(alb).arg(cnt.total));
         item->setData(Qt::UserRole, alb);
         m_albumList->addItem(item);
         if (alb == m_selectedAlbum) {
