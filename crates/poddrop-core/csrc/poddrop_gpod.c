@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
+#include <sys/statvfs.h>
 #include <unistd.h>
 
 typedef struct {
@@ -366,5 +367,101 @@ int poddrop_gpod_remove_track(
     }
 
     itdb_free(itdb);
+    return 0;
+}
+
+typedef struct {
+    const char *title;
+    const char *artist;
+    const char *album;
+    const char *genre;
+    int32_t track_number;
+    int32_t disc_number;
+    int32_t year;
+    const char *artwork_path;
+    int32_t clear_artwork;
+} PodDropGpodUpdateTrackRequest;
+
+int poddrop_gpod_update_track(
+    const char *mount_path,
+    uint64_t track_id,
+    const PodDropGpodUpdateTrackRequest *req,
+    char **out_err
+) {
+    if (!mount_path || !req) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Track *track = itdb_track_by_id(itdb, (guint32)track_id);
+    if (!track) {
+        if (out_err) *out_err = g_strdup_printf("Track ID %" G_GUINT64_FORMAT " not found", track_id);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (req->title) {
+        g_free(track->title);
+        track->title = g_strdup(req->title);
+    }
+    if (req->artist) {
+        g_free(track->artist);
+        track->artist = g_strdup(req->artist);
+    }
+    if (req->album) {
+        g_free(track->album);
+        track->album = g_strdup(req->album);
+    }
+    if (req->genre) {
+        g_free(track->genre);
+        track->genre = g_strdup(req->genre);
+    }
+    if (req->track_number >= 0) track->track_nr = req->track_number;
+    if (req->disc_number >= 0) track->cd_nr = req->disc_number;
+    if (req->year >= 0) track->year = req->year;
+
+    if (req->clear_artwork) {
+        itdb_track_remove_thumbnails(track);
+    } else if (req->artwork_path && req->artwork_path[0] != '\0') {
+        if (itdb->device && itdb_device_supports_artwork(itdb->device)) {
+            itdb_track_remove_thumbnails(track);
+            if (!itdb_track_set_thumbnails(track, req->artwork_path)) {
+                if (out_err) *out_err = g_strdup("Failed to update track cover art");
+                itdb_free(itdb);
+                return -1;
+            }
+        }
+    }
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    itdb_free(itdb);
+    return 0;
+}
+
+int poddrop_statvfs(const char *path, uint64_t *out_total_bytes, uint64_t *out_free_bytes) {
+    if (!path || !out_total_bytes || !out_free_bytes) return -1;
+    struct statvfs st;
+    if (statvfs(path, &st) != 0) return -1;
+    uint64_t bsize = (uint64_t)st.f_frsize;
+    *out_total_bytes = (uint64_t)st.f_blocks * bsize;
+    *out_free_bytes = (uint64_t)st.f_bavail * bsize;
     return 0;
 }

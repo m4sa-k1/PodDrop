@@ -88,4 +88,6 @@ pub struct DeviceInfo {
     pub supports_artwork: bool,
     pub track_count: u32,
     pub playlist_count: u32,
+    pub storage_total_bytes: Option<u64>,
+    pub storage_free_bytes: Option<u64>,
 }

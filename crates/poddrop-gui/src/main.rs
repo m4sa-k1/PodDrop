@@ -1,3 +1,4 @@
+mod dialogs;
 mod window;
 
 use adw::prelude::*;
