@@ -18,7 +18,7 @@ PodDrop is designed for Linux users who want a clean, fast, and reliable way to 
 
 ### Planned Features
 
-- Lightweight native Linux GUI (GTK4)
+- Lightweight native Linux GUI (C++ / Qt6 Widgets + Rust core)
 - High-compatibility database sync (`iTunesDB` / `Hash58` / `Hash72`) via `libgpod`
 - Album artwork registration (`ArtworkDB` / RGB565 `.ithmb` conversion)
 - Safe pre-write backup of device databases
@@ -35,6 +35,7 @@ We are building PodDrop step by step with hardware verification at each mileston
 ```bash
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+cmake -S qt-gui -B build && cmake --build build -j
 ```
 
 ## License

@@ -3,7 +3,7 @@ resolver = "2"
 members = [
     "crates/poddrop-core",
     "crates/poddrop-cli",
-    "crates/poddrop-gui",
+    "crates/poddrop-ffi",
 ]
 
 [workspace.package]

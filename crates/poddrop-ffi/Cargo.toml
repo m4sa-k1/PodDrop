@@ -1,15 +1,17 @@
 [package]
-name = "poddrop-gui"
+name = "poddrop-ffi"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
 authors.workspace = true
-description = "Lightweight classic GTK4 GUI for PodDrop"
+description = "C ABI bridge exposing poddrop-core for the Qt6 GUI"
+
+[lib]
+crate-type = ["staticlib"]
 
 [dependencies]
 poddrop-core = { path = "../poddrop-core" }
-gtk4 = { version = "0.9", features = ["v4_10"] }
 
 [lints]
 workspace = true

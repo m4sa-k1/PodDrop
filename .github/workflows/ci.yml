@@ -19,7 +19,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y pkg-config libgpod-dev libgtk-4-dev
+          sudo apt-get install -y pkg-config libgpod-dev cmake g++ qt6-base-dev
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -34,3 +34,8 @@ jobs:
 
       - name: Run tests
         run: cargo test --workspace
+
+      - name: Build Qt6 GUI
+        run: |
+          cmake -S qt-gui -B build
+          cmake --build build -j

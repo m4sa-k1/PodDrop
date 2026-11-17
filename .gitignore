@@ -1,5 +1,6 @@
-# Rust / Cargo
+# Rust / Cargo / CMake
 /target/
+/build/
 **/*.rs.bk
 Cargo.lock
 
