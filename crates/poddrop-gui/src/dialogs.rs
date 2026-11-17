@@ -23,7 +23,7 @@ pub fn show_create_album_dialog(
     initial_artist: Option<&str>,
     on_submit: CreateAlbumCallback,
 ) {
-    let win = gtk4::Window::builder()
+    let win = adw::Window::builder()
         .title(tr.t("gui.create_album"))
         .transient_for(parent)
         .modal(true)
@@ -32,6 +32,8 @@ pub fn show_create_album_dialog(
         .build();
 
     let header = adw::HeaderBar::new();
+    header.set_show_start_title_buttons(false);
+    header.set_show_end_title_buttons(false);
     let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
     let submit_btn = gtk4::Button::with_label(tr.t("gui.select_files"));
     submit_btn.add_css_class("primary-btn");
@@ -86,9 +88,10 @@ pub fn show_create_album_dialog(
     content.append(&cover_label);
 
     let toolbar = adw::ToolbarView::new();
+    toolbar.set_top_bar_style(adw::ToolbarStyle::Raised);
     toolbar.add_top_bar(&header);
     toolbar.set_content(Some(&content));
-    win.set_child(Some(&toolbar));
+    win.set_content(Some(&toolbar));
 
     {
         let win_c = win.clone();
@@ -193,7 +196,7 @@ pub fn show_track_editor_dialog(
     can_write: bool,
     on_save: UpdateTrackCallback,
 ) {
-    let win = gtk4::Window::builder()
+    let win = adw::Window::builder()
         .title(&track.title)
         .transient_for(parent)
         .modal(true)
@@ -202,6 +205,8 @@ pub fn show_track_editor_dialog(
         .build();
 
     let header = adw::HeaderBar::new();
+    header.set_show_start_title_buttons(false);
+    header.set_show_end_title_buttons(false);
     let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
     let save_btn = gtk4::Button::with_label(tr.t("gui.save"));
     save_btn.add_css_class("primary-btn");
@@ -326,9 +331,10 @@ pub fn show_track_editor_dialog(
         .build();
 
     let toolbar = adw::ToolbarView::new();
+    toolbar.set_top_bar_style(adw::ToolbarStyle::Raised);
     toolbar.add_top_bar(&header);
     toolbar.set_content(Some(&scrolled));
-    win.set_child(Some(&toolbar));
+    win.set_content(Some(&toolbar));
 
     {
         let win_c = win.clone();

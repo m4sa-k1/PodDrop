@@ -367,6 +367,7 @@ pub fn build_main_window(app: &adw::Application) {
     toast_overlay.set_child(Some(&root_box));
 
     let toolbar_view = adw::ToolbarView::new();
+    toolbar_view.set_top_bar_style(adw::ToolbarStyle::Raised);
     toolbar_view.add_top_bar(&header_bar);
     toolbar_view.set_content(Some(&toast_overlay));
 
