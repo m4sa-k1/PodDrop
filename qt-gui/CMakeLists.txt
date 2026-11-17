@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(poddrop-gui VERSION 0.1.4 LANGUAGES CXX)
+project(poddrop-gui VERSION 0.1.5 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -29,6 +29,10 @@ add_custom_target(poddrop_ffi_build ALL
 add_executable(poddrop-gui
     src/main.cpp
     src/mainwindow.cpp
+    src/mainwindow_device.cpp
+    src/mainwindow_albums.cpp
+    src/mainwindow_playlists.cpp
+    src/mainwindow_transfer.cpp
     src/dialogs.cpp
     resources/resources.qrc
 )

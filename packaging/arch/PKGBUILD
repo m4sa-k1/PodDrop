@@ -1,6 +1,6 @@
 # Maintainer: m4sa-k1 <https://github.com/m4sa-k1/PodDrop>
 pkgname=poddrop
-pkgver=0.1.4
+pkgver=0.1.5
 pkgrel=1
 pkgdesc="Lightweight music and cover artwork manager for classic iPods"
 arch=('x86_64')
