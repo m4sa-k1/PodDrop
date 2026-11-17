@@ -445,6 +445,26 @@ pub fn detect_mount_fs(mount_path: &Path) -> (FilesystemType, bool) {
     (FilesystemType::Unknown, false)
 }
 
+/// Scans `/proc/mounts` for mounted filesystems containing an `iPod_Control` directory.
+pub fn discover_mounted_ipods() -> Vec<PathBuf> {
+    let Ok(mounts) = fs::read_to_string("/proc/mounts") else {
+        return Vec::new();
+    };
+    let mut found = Vec::new();
+    for line in mounts.lines() {
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.len() < 3 {
+            continue;
+        }
+        let mnt_str = parts[1].replace("\\040", " ");
+        let path = PathBuf::from(mnt_str);
+        if path.join("iPod_Control").is_dir() && !found.contains(&path) {
+            found.push(path);
+        }
+    }
+    found
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
