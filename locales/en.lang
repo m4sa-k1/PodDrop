@@ -1,0 +1,7 @@
+app.name=PodDrop
+app.tagline=Lightweight music & artwork manager for classic iPods
+cli.version=PodDrop
+cli.usage=Usage: poddrop-cli [--version] [--lang en|ja]
+error.device_not_found=iPod device not found at the specified mount point
+error.unsupported_model=Unsupported iPod model
+error.readonly_fs=Device filesystem is mounted read-only (HFS+ journaling may be enabled)

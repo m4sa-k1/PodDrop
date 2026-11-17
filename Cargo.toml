@@ -1,0 +1,21 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/poddrop-core",
+    "crates/poddrop-cli",
+    "crates/poddrop-gui",
+]
+
+[workspace.package]
+version = "0.1.0-dev"
+edition = "2021"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/m4sa-k1/PodDrop"
+authors = ["m4sa-k1"]
+rust-version = "1.75"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "warn"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }

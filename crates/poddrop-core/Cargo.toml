@@ -1,0 +1,13 @@
+[package]
+name = "poddrop-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+description = "Core library for PodDrop iPod music and artwork management"
+
+[dependencies]
+
+[lints]
+workspace = true

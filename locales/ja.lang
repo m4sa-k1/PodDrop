@@ -1,0 +1,7 @@
+app.name=PodDrop
+app.tagline=クラシック系 iPod 向け軽量音楽・ジャケット管理ツール
+cli.version=PodDrop
+cli.usage=使い方: poddrop-cli [--version] [--lang en|ja]
+error.device_not_found=指定されたマウントポイントに iPod が見つかりません
+error.unsupported_model=未対応の iPod モデルです
+error.readonly_fs=デバイスが読み取り専用でマウントされています（HFS+ ジャーナリングが有効な可能性があります）
