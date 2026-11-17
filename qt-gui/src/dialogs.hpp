@@ -112,6 +112,7 @@ struct PlaylistItem {
 struct PlaylistEditResult {
     QString name;
     QVector<uint32_t> trackIds;
+    QVector<uint32_t> deleteTrackIdsFromIpod;
 };
 
 struct PlaylistPickResult {

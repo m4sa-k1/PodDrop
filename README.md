@@ -30,7 +30,7 @@ A lightweight, open-source desktop application for transferring music and regist
 - 🌐 **English / Japanese UI switching** & **Light (White) / Dark (Black) themes**
 - 🔧 **Built-in SCSI VPD Reader** (`poddrop-cli read-sysinfo` reads `SysInfoExtended` directly without external binaries)
 
-### 📱 Supported Models (`v0.1.5`)
+### 📱 Supported Models (`v0.1.6`)
 - **iPod Classic** (1st – 7th generation)
 - **iPod Mini** (1st – 2nd generation)
 - **iPod Nano** (1st – 5th generation)
@@ -41,11 +41,11 @@ A lightweight, open-source desktop application for transferring music and regist
 ### 🚀 Quick Install
 
 #### Option 1: Prebuilt Release Archive (Recommended, no build required)
-Download `poddrop-v0.1.5-linux-x86_64.tar.gz` from [Releases](https://github.com/m4sa-k1/PodDrop/releases), extract it, and run `./install.sh`:
+Download `poddrop-v0.1.6-linux-x86_64.tar.gz` from [Releases](https://github.com/m4sa-k1/PodDrop/releases), extract it, and run `./install.sh`:
 
 ```bash
-tar -xzf poddrop-v0.1.5-linux-x86_64.tar.gz
-cd poddrop-v0.1.5-linux-x86_64
+tar -xzf poddrop-v0.1.6-linux-x86_64.tar.gz
+cd poddrop-v0.1.6-linux-x86_64
 ./install.sh          # Install for current user (~/.local)
 # Or system-wide: sudo ./install.sh --system
 ```
@@ -128,7 +128,7 @@ Linux でクラシック系 iPod へ音楽転送とカバー画像登録がで�
 - 🌐 **日本語 / English 切り替え** ＆ **ライト（白）/ ダーク（黒）テーマ切り替え**
 - 🔧 **自前 SCSI VPD リーダー内蔵**（`poddrop-cli read-sysinfo` により外部バイナリに頼らず `SysInfoExtended` を取得可能）
 
-### 📱 対応機種（`v0.1.5`）
+### 📱 対応機種（`v0.1.6`）
 
 - **iPod Classic**（第1世代 〜 第7世代）
 - **iPod Mini**（第1世代 〜 第2世代）
@@ -141,11 +141,11 @@ Linux でクラシック系 iPod へ音楽転送とカバー画像登録がで�
 
 #### 方法 1：リリース版アーカイブから導入（おすすめ・ビルド不要）
 
-[Releases](https://github.com/m4sa-k1/PodDrop/releases) から `poddrop-v0.1.5-linux-x86_64.tar.gz` をダウンロードして展開し、`./install.sh` を実行するだけです！
+[Releases](https://github.com/m4sa-k1/PodDrop/releases) から `poddrop-v0.1.6-linux-x86_64.tar.gz` をダウンロードして展開し、`./install.sh` を実行するだけです！
 
 ```bash
-tar -xzf poddrop-v0.1.5-linux-x86_64.tar.gz
-cd poddrop-v0.1.5-linux-x86_64
+tar -xzf poddrop-v0.1.6-linux-x86_64.tar.gz
+cd poddrop-v0.1.6-linux-x86_64
 ./install.sh          # ユーザー環境 (~/.local) にインストール
 # システム全体に入れる場合: sudo ./install.sh --system
 ```

@@ -699,9 +699,15 @@ std::optional<PlaylistEditResult> runPlaylistEditorDialog(
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
 
+    auto *deleteFromIpodChk = new QCheckBox(trText(lang, "dlg.playlist_delete_from_ipod"), &dlg);
+    deleteFromIpodChk->setChecked(false);
+    deleteFromIpodChk->setVisible(!isNew);
+    deleteFromIpodChk->setEnabled(canWrite);
+
     auto *root = new QVBoxLayout(&dlg);
     root->addLayout(nameRow);
     root->addLayout(body, 1);
+    root->addWidget(deleteFromIpodChk);
     root->addWidget(buttons);
 
     if (dlg.exec() != QDialog::Accepted || !canWrite) {
@@ -714,9 +720,19 @@ std::optional<PlaylistEditResult> runPlaylistEditorDialog(
         resultIds.push_back(static_cast<uint32_t>(memberList->item(i)->data(Qt::UserRole).toULongLong()));
     }
 
+    QVector<uint32_t> deleteFromIpod;
+    if (!isNew && deleteFromIpodChk->isChecked()) {
+        for (uint32_t oldId : initialTrackIds) {
+            if (!resultIds.contains(oldId) && !deleteFromIpod.contains(oldId)) {
+                deleteFromIpod.push_back(oldId);
+            }
+        }
+    }
+
     return PlaylistEditResult{
         nameEdit->text().trimmed(),
         resultIds,
+        deleteFromIpod,
     };
 }
 

@@ -86,7 +86,7 @@ void MainWindow::editSelectedPlaylist() {
     std::thread([this, mp, plId, res]() {
         const QByteArray nameB = res.name.toUtf8();
         char *err = nullptr;
-        const int32_t rc = poddrop_update_playlist(
+        int32_t rc = poddrop_update_playlist(
             mp.constData(),
             plId,
             nameB.constData(),
@@ -95,7 +95,21 @@ void MainWindow::editSelectedPlaylist() {
             1,
             &err
         );
-        const QString errMsg = takeCString(err);
+        QString errMsg = takeCString(err);
+
+        if (rc == 0 && !res.deleteTrackIdsFromIpod.isEmpty()) {
+            for (uint32_t tid : res.deleteTrackIdsFromIpod) {
+                char *delErr = nullptr;
+                if (poddrop_remove_track(mp.constData(), static_cast<uint64_t>(tid), &delErr) != 0) {
+                    rc = -1;
+                    if (errMsg.isEmpty()) {
+                        errMsg = takeCString(delErr);
+                    } else {
+                        poddrop_free_string(delErr);
+                    }
+                }
+            }
+        }
 
         QMetaObject::invokeMethod(
             this,
