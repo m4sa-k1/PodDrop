@@ -1,0 +1,30 @@
+# Maintainer: m4sa-k1 <https://github.com/m4sa-k1/PodDrop>
+pkgname=poddrop
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Lightweight music and cover artwork manager for classic iPods"
+arch=('x86_64')
+url="https://github.com/m4sa-k1/PodDrop"
+license=('GPL-3.0-or-later')
+depends=('libgpod' 'gdk-pixbuf2' 'qt6-base' 'ffmpeg' 'udisks2')
+makedepends=('git' 'rust' 'cargo' 'cmake' 'gcc' 'pkgconf')
+source=("${pkgname}::git+https://github.com/m4sa-k1/PodDrop.git#tag=v${pkgver}")
+sha256sums=('SKIP')
+
+build() {
+    cd "${srcdir}/${pkgname}"
+    cargo build --release -p poddrop-cli
+    cmake -S qt-gui -B build -DCMAKE_BUILD_TYPE=Release
+    cmake --build build -j"$(nproc)"
+}
+
+check() {
+    cd "${srcdir}/${pkgname}"
+    cargo test --workspace
+}
+
+package() {
+    cd "${srcdir}/${pkgname}"
+    DESTDIR="${pkgdir}" cmake --install build --prefix /usr
+    install -Dm755 target/release/poddrop-cli "${pkgdir}/usr/bin/poddrop-cli"
+}

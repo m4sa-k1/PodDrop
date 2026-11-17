@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build-release:
+    name: Build & Publish Linux Release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y pkg-config libgpod-dev libgdk-pixbuf-2.0-dev cmake g++ qt6-base-dev
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Run tests
+        run: cargo test --workspace
+
+      - name: Build release binaries
+        run: |
+          cargo build --release -p poddrop-cli
+          cmake -S qt-gui -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j
+
+      - name: Stage release archive
+        run: |
+          TAG="${GITHUB_REF_NAME}"
+          PKG_DIR="poddrop-${TAG}-linux-x86_64"
+          mkdir -p "dist/${PKG_DIR}"
+          cmake --install build --prefix "dist/${PKG_DIR}/files"
+          install -Dm755 target/release/poddrop-cli "dist/${PKG_DIR}/files/bin/poddrop-cli"
+          cp LICENSE README.md CHANGELOG.md "dist/${PKG_DIR}/"
+
+          cat <<'EOF' > "dist/${PKG_DIR}/install.sh"
+          #!/usr/bin/env bash
+          set -euo pipefail
+          PREFIX="${HOME}/.local"
+          if [[ "${1:-}" == "--system" ]]; then
+              PREFIX="/usr/local"
+          elif [[ "${1:-}" == "--prefix" && -n "${2:-}" ]]; then
+              PREFIX="$2"
+          fi
+          DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+          mkdir -p "${PREFIX}/bin" "${PREFIX}/share/applications" \
+              "${PREFIX}/share/icons/hicolor/scalable/apps" \
+              "${PREFIX}/share/icons/hicolor/128x128/apps"
+          install -Dm755 "${DIR}/files/bin/poddrop-gui" "${PREFIX}/bin/poddrop-gui"
+          install -Dm755 "${DIR}/files/bin/poddrop-cli" "${PREFIX}/bin/poddrop-cli"
+          install -Dm644 "${DIR}/files/share/applications/io.github.m4sa_k1.PodDrop.desktop" \
+              "${PREFIX}/share/applications/io.github.m4sa_k1.PodDrop.desktop"
+          install -Dm644 "${DIR}/files/share/icons/hicolor/scalable/apps/io.github.m4sa_k1.PodDrop.svg" \
+              "${PREFIX}/share/icons/hicolor/scalable/apps/io.github.m4sa_k1.PodDrop.svg"
+          install -Dm644 "${DIR}/files/share/icons/hicolor/128x128/apps/io.github.m4sa_k1.PodDrop.png" \
+              "${PREFIX}/share/icons/hicolor/128x128/apps/io.github.m4sa_k1.PodDrop.png"
+          command -v gtk-update-icon-cache >/dev/null 2>&1 && gtk-update-icon-cache -f -t "${PREFIX}/share/icons/hicolor" >/dev/null 2>&1 || true
+          command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "${PREFIX}/share/applications" >/dev/null 2>&1 || true
+          echo "Installed PodDrop to ${PREFIX}"
+          EOF
+          chmod +x "dist/${PKG_DIR}/install.sh"
+
+          tar -C dist -czf "dist/${PKG_DIR}.tar.gz" "${PKG_DIR}"
+          (cd dist && sha256sum "${PKG_DIR}.tar.gz" > "${PKG_DIR}.tar.gz.sha256")
+
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256

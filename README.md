@@ -28,6 +28,35 @@ PodDrop is designed for Linux users who want a fast, reliable, classic desktop u
 - Safe eject (`sync` + `udisksctl unmount` + `udisksctl power-off`)
 - Bilingual UI: English & Japanese (`en` / `ja`) + Light / Dark monochrome themes
 
+## Quick Install
+
+### Option 1: From GitHub Releases (Prebuilt x86_64 Archive)
+
+Download `poddrop-v0.1.0-linux-x86_64.tar.gz` from [Releases](https://github.com/m4sa-k1/PodDrop/releases), then run:
+
+```bash
+tar -xzf poddrop-v0.1.0-linux-x86_64.tar.gz
+cd poddrop-v0.1.0-linux-x86_64
+./install.sh          # User install (~/.local)
+# or: sudo ./install.sh --system
+```
+
+### Option 2: Arch Linux (`PKGBUILD`)
+
+```bash
+git clone https://github.com/m4sa-k1/PodDrop.git
+cd PodDrop/packaging/arch
+makepkg -si
+```
+
+### Option 3: One-Step Source Install
+
+```bash
+git clone https://github.com/m4sa-k1/PodDrop.git
+cd PodDrop
+./scripts/install.sh  # Use --system for /usr/local
+```
+
 ## Dependencies
 
 - Rust toolchain (`cargo`, `rustc` >= 1.75)
@@ -97,3 +126,9 @@ Licensed under the [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0
 - 曲情報およびアルバム単位での一括閲覧・編集
 - 実機画面を切り替える安全な取り出し（`sync` + `udisksctl unmount` + `udisksctl power-off`）
 - 日本語 / 英語切り替え、ライト / ダーク（白黒基調）テーマ切り替え
+
+### 簡単インストール
+
+- **リリース版アーカイブ（ビルド不要）**: [Releases](https://github.com/m4sa-k1/PodDrop/releases) から `.tar.gz` を展開し、`./install.sh` を実行（システム全体に入れる場合は `sudo ./install.sh --system`）。
+- **Arch Linux (`makepkg`)**: `packaging/arch/PKGBUILD` のディレクトリで `makepkg -si`。
+- **ソースから 1 コマンド導入**: リポジトリ直下で `./scripts/install.sh`（アンインストールは `./scripts/uninstall.sh`）。
