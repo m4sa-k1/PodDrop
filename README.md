@@ -24,7 +24,7 @@ Linux でクラシック系 iPod へ音楽転送とカバー画像登録がで�
 
 ---
 
-## 📱 対応機種（`v0.1.0`）
+## 📱 対応機種（`v0.1.1`）
 
 - **iPod Classic**（第1世代 〜 第7世代）
 - **iPod Mini**（第1世代 〜 第2世代）
@@ -39,11 +39,11 @@ Linux でクラシック系 iPod へ音楽転送とカバー画像登録がで�
 
 ### 方法 1：リリース版アーカイブから導入（おすすめ・ビルド不要）
 
-[Releases](https://github.com/m4sa-k1/PodDrop/releases) から `poddrop-v0.1.0-linux-x86_64.tar.gz` をダウンロードして展開し、`./install.sh` を実行するだけです！
+[Releases](https://github.com/m4sa-k1/PodDrop/releases) から `poddrop-v0.1.1-linux-x86_64.tar.gz` をダウンロードして展開し、`./install.sh` を実行するだけです！
 
 ```bash
-tar -xzf poddrop-v0.1.0-linux-x86_64.tar.gz
-cd poddrop-v0.1.0-linux-x86_64
+tar -xzf poddrop-v0.1.1-linux-x86_64.tar.gz
+cd poddrop-v0.1.1-linux-x86_64
 ./install.sh          # ユーザー環境 (~/.local) にインストール
 # システム全体に入れる場合: sudo ./install.sh --system
 ```
