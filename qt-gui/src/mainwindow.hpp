@@ -17,6 +17,7 @@ class QProgressBar;
 class QPushButton;
 class QTableWidget;
 class QToolBar;
+class QToolButton;
 class QMenu;
 
 struct DeviceSummary {
@@ -98,6 +99,7 @@ private:
     QAction *m_actThemeDark = nullptr;
 
     QToolBar *m_toolbar = nullptr;
+    QToolButton *m_closeBtn = nullptr;
     QComboBox *m_formatCombo = nullptr;
 
     // Read-only notice bar

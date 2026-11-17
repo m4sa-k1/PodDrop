@@ -26,6 +26,7 @@
 #include <QStyle>
 #include <QTableWidget>
 #include <QToolBar>
+#include <QToolButton>
 #include <QVBoxLayout>
 #include <map>
 #include <thread>
@@ -103,6 +104,14 @@ void MainWindow::setupUi() {
     themeGroup->addAction(m_actThemeDark);
     m_actThemeLight->setChecked(!m_darkTheme);
     m_actThemeDark->setChecked(m_darkTheme);
+
+    // Top-right close button on menu bar
+    m_closeBtn = new QToolButton(this);
+    m_closeBtn->setAutoRaise(true);
+    m_closeBtn->setIcon(st->standardIcon(QStyle::SP_TitleBarCloseButton));
+    m_closeBtn->setFixedSize(26, 22);
+    menuBar()->setCornerWidget(m_closeBtn, Qt::TopRightCorner);
+    connect(m_closeBtn, &QToolButton::clicked, this, &QWidget::close);
 
     // Toolbar
     m_toolbar = addToolBar("MainToolbar");
@@ -186,13 +195,14 @@ void MainWindow::setupUi() {
     m_trackTable->verticalHeader()->setVisible(false);
     m_trackTable->horizontalHeader()->setSectionResizeMode(QHeaderView::Interactive);
     m_trackTable->horizontalHeader()->setStretchLastSection(true);
+    m_trackTable->horizontalHeader()->setDefaultAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     m_trackTable->setColumnWidth(0, 42);
-    m_trackTable->setColumnWidth(1, 210);
-    m_trackTable->setColumnWidth(2, 140);
-    m_trackTable->setColumnWidth(3, 150);
+    m_trackTable->setColumnWidth(1, 200);
+    m_trackTable->setColumnWidth(2, 135);
+    m_trackTable->setColumnWidth(3, 145);
     m_trackTable->setColumnWidth(4, 90);
-    m_trackTable->setColumnWidth(5, 64);
-    m_trackTable->setColumnWidth(6, 76);
+    m_trackTable->setColumnWidth(5, 74);
+    m_trackTable->setColumnWidth(6, 115);
 
     rightLayout->addLayout(filterRow);
     rightLayout->addWidget(m_trackTable, 1);
@@ -314,6 +324,9 @@ void MainWindow::applyTranslations() {
     m_actOpen->setText(trText(m_lang, "act.open"));
     m_actRefresh->setText(trText(m_lang, "act.refresh"));
     m_actExit->setText(trText(m_lang, "act.exit"));
+    if (m_closeBtn) {
+        m_closeBtn->setToolTip(trText(m_lang, "act.exit"));
+    }
     m_actAddMusic->setText(trText(m_lang, "act.add_music"));
     m_actCreateAlbum->setText(trText(m_lang, "act.create_album"));
     m_actEditTrack->setText(trText(m_lang, "act.edit_track"));
