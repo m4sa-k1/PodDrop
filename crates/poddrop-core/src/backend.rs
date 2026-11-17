@@ -91,4 +91,5 @@ pub trait IpodBackend {
     ) -> Result<()>;
     fn update_album(&self, mount_path: &Path, request: &UpdateAlbumRequest) -> Result<u32>;
     fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()>;
+    fn get_track_artwork_png(&self, mount_path: &Path, track_id: u64) -> Result<Option<Vec<u8>>>;
 }

@@ -128,6 +128,14 @@ extern "C" {
         out_total_bytes: *mut u64,
         out_free_bytes: *mut u64,
     ) -> c_int;
+    fn poddrop_gpod_get_track_artwork_png(
+        mount_path: *const c_char,
+        track_id: u64,
+        out_data: *mut *mut u8,
+        out_len: *mut usize,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_free_bytes(data: *mut u8);
 }
 
 /// Reads `SysInfoExtended` plist XML directly from an iPod block device via SCSI VPD (read-only).
@@ -480,6 +488,80 @@ impl IpodBackend for LibgpodBackend {
             return Err(PodDropError::Backend(take_c_error(err_ptr)));
         }
         Ok(updated)
+    }
+
+    fn get_track_artwork_png(&self, mount_path: &Path, track_id: u64) -> Result<Option<Vec<u8>>> {
+        validate_mount_path(mount_path)?;
+        let c_mount = path_to_cstring(mount_path)?;
+        let mut data_ptr: *mut u8 = ptr::null_mut();
+        let mut data_len: usize = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+
+        let rc = unsafe {
+            poddrop_gpod_get_track_artwork_png(
+                c_mount.as_ptr(),
+                track_id,
+                &mut data_ptr,
+                &mut data_len,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        if data_ptr.is_null() || data_len == 0 {
+            if !data_ptr.is_null() {
+                unsafe { poddrop_gpod_free_bytes(data_ptr) };
+            }
+            return Ok(None);
+        }
+
+        let bytes = unsafe { std::slice::from_raw_parts(data_ptr, data_len) }.to_vec();
+        unsafe { poddrop_gpod_free_bytes(data_ptr) };
+        Ok(Some(bytes))
+    }
+}
+
+/// Flushes buffers (`sync`) and safely unmounts the mounted iPod via `udisksctl` or `umount`.
+pub fn eject_ipod(mount_path: &Path) -> Result<()> {
+    let canonical = fs::canonicalize(mount_path).unwrap_or_else(|_| mount_path.to_path_buf());
+    let target = canonical.to_string_lossy();
+
+    let block_dev = fs::read_to_string("/proc/mounts").ok().and_then(|mounts| {
+        mounts.lines().find_map(|line| {
+            let parts: Vec<&str> = line.split_whitespace().collect();
+            if parts.len() >= 2 && parts[1].replace("\\040", " ") == target {
+                Some(parts[0].to_string())
+            } else {
+                None
+            }
+        })
+    });
+
+    let _ = std::process::Command::new("sync").status();
+
+    if let Some(dev) = block_dev {
+        if let Ok(out) = std::process::Command::new("udisksctl")
+            .args(["unmount", "-b", &dev])
+            .output()
+        {
+            if out.status.success() {
+                return Ok(());
+            }
+        }
+    }
+
+    let out = std::process::Command::new("umount")
+        .arg(mount_path)
+        .output()
+        .map_err(|e| PodDropError::Io(format!("Failed to unmount iPod: {e}")))?;
+
+    if out.status.success() {
+        Ok(())
+    } else {
+        Err(PodDropError::Backend(
+            String::from_utf8_lossy(&out.stderr).trim().to_string(),
+        ))
     }
 }
 

@@ -55,8 +55,10 @@ private:
     void populateAlbums();
     void populateTracks();
     void updateActionStates();
+    void updateCoverPreview();
 
     void openMountFolder();
+    void ejectDevice();
     void addMusicFiles();
     void createAlbum(const QString &initialAlbum = QString(), const QString &initialArtist = QString());
     void addToSelectedAlbum();
@@ -89,6 +91,7 @@ private:
     QMenu *m_viewMenu = nullptr;
     QAction *m_actOpen = nullptr;
     QAction *m_actRefresh = nullptr;
+    QAction *m_actEject = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actAddMusic = nullptr;
     QAction *m_actCreateAlbum = nullptr;
@@ -116,6 +119,8 @@ private:
     QListWidget *m_albumList = nullptr;
     QPushButton *m_addToAlbumBtn = nullptr;
     QPushButton *m_editAlbumBtn = nullptr;
+    QLabel *m_coverPreview = nullptr;
+    QLabel *m_coverCaption = nullptr;
 
     // Right pane
     QGroupBox *m_libraryGroup = nullptr;

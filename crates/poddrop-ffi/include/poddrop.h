@@ -96,8 +96,17 @@ int32_t poddrop_update_album(
     char **out_err
 );
 int32_t poddrop_remove_track(const char *mount_path, uint64_t track_id, char **out_err);
+int32_t poddrop_get_track_artwork_png(
+    const char *mount_path,
+    uint64_t track_id,
+    uint8_t **out_data,
+    size_t *out_len,
+    char **out_err
+);
+int32_t poddrop_eject_device(const char *mount_path, char **out_err);
 
 void poddrop_free_string(char *s);
+void poddrop_free_bytes(uint8_t *data, size_t len);
 void poddrop_free_device_info(PodDropDeviceInfo *info);
 void poddrop_free_tracks(PodDropTrack *tracks, size_t count);
 

@@ -1,4 +1,5 @@
 #include <gpod/itdb.h>
+#include <gdk-pixbuf/gdk-pixbuf.h>
 #include <glib.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -563,5 +564,65 @@ int poddrop_gpod_update_album(
         *out_updated_count = updated;
     }
     itdb_free(itdb);
+    return 0;
+}
+
+void poddrop_gpod_free_bytes(uint8_t *data) {
+    g_free(data);
+}
+
+int poddrop_gpod_get_track_artwork_png(
+    const char *mount_path,
+    uint64_t track_id,
+    uint8_t **out_data,
+    size_t *out_len,
+    char **out_err
+) {
+    if (!mount_path || !out_data || !out_len) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+    *out_data = NULL;
+    *out_len = 0;
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Track *track = itdb_track_by_id(itdb, (guint32)track_id);
+    if (!track) {
+        itdb_free(itdb);
+        return 0;
+    }
+
+    GdkPixbuf *pixbuf = (GdkPixbuf *)itdb_track_get_thumbnail(track, -1, -1);
+    if (!pixbuf) {
+        itdb_free(itdb);
+        return 0;
+    }
+
+    gchar *png_buf = NULL;
+    gsize png_len = 0;
+    const gboolean ok = gdk_pixbuf_save_to_buffer(pixbuf, &png_buf, &png_len, "png", &err, NULL);
+    g_object_unref(pixbuf);
+    itdb_free(itdb);
+
+    if (!ok) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to encode cover thumbnail to PNG");
+        }
+        if (err) g_error_free(err);
+        g_free(png_buf);
+        return -1;
+    }
+
+    *out_data = (uint8_t *)png_buf;
+    *out_len = (size_t)png_len;
     return 0;
 }

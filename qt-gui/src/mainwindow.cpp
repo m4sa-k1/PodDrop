@@ -73,6 +73,10 @@ void MainWindow::setupUi() {
     m_fileMenu = menuBar()->addMenu(QString());
     m_actOpen = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DirOpenIcon), QString());
     m_actRefresh = m_fileMenu->addAction(st->standardIcon(QStyle::SP_BrowserReload), QString());
+    m_actEject = m_fileMenu->addAction(
+        QIcon::fromTheme("media-eject", st->standardIcon(QStyle::SP_DriveHDIcon)),
+        QString()
+    );
     m_fileMenu->addSeparator();
     m_actExit = m_fileMenu->addAction(QString());
 
@@ -120,6 +124,7 @@ void MainWindow::setupUi() {
     m_toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     m_toolbar->addAction(m_actOpen);
     m_toolbar->addAction(m_actRefresh);
+    m_toolbar->addAction(m_actEject);
     m_toolbar->addSeparator();
     m_toolbar->addAction(m_actAddMusic);
     m_toolbar->addAction(m_actCreateAlbum);
@@ -176,6 +181,17 @@ void MainWindow::setupUi() {
 
     leftLayout->addWidget(m_deviceGroup);
     leftLayout->addWidget(m_albumsGroup, 1);
+
+    auto *previewRow = new QHBoxLayout();
+    m_coverPreview = new QLabel(leftWidget);
+    m_coverPreview->setFixedSize(84, 84);
+    m_coverPreview->setAlignment(Qt::AlignCenter);
+    m_coverPreview->setFrameStyle(QFrame::Box | QFrame::Plain);
+    m_coverCaption = new QLabel(leftWidget);
+    m_coverCaption->setWordWrap(true);
+    previewRow->addWidget(m_coverPreview);
+    previewRow->addWidget(m_coverCaption, 1);
+    leftLayout->addLayout(previewRow);
 
     // Right Pane
     m_libraryGroup = new QGroupBox(splitter);
@@ -238,6 +254,7 @@ void MainWindow::setupUi() {
         }
         reloadDevice();
     });
+    connect(m_actEject, &QAction::triggered, this, &MainWindow::ejectDevice);
     connect(m_actExit, &QAction::triggered, this, &QWidget::close);
     connect(m_actAddMusic, &QAction::triggered, this, &MainWindow::addMusicFiles);
     connect(m_actCreateAlbum, &QAction::triggered, this, [this]() { createAlbum(); });
@@ -292,7 +309,10 @@ void MainWindow::setupUi() {
         menu.exec(m_albumList->viewport()->mapToGlobal(pos));
     });
 
-    connect(m_trackTable, &QTableWidget::itemSelectionChanged, this, &MainWindow::updateActionStates);
+    connect(m_trackTable, &QTableWidget::itemSelectionChanged, this, [this]() {
+        updateActionStates();
+        updateCoverPreview();
+    });
     connect(m_trackTable, &QTableWidget::cellDoubleClicked, this, [this](int, int) {
         editSelectedTrack();
     });
@@ -342,6 +362,7 @@ void MainWindow::applyTranslations() {
 
     m_actOpen->setText(trText(m_lang, "act.open"));
     m_actRefresh->setText(trText(m_lang, "act.refresh"));
+    m_actEject->setText(trText(m_lang, "act.eject"));
     m_actExit->setText(trText(m_lang, "act.exit"));
     if (m_closeBtn) {
         m_closeBtn->setToolTip(trText(m_lang, "act.exit"));
@@ -570,6 +591,51 @@ void MainWindow::populateTracks() {
 
     m_trackTable->setSortingEnabled(true);
     updateActionStates();
+    updateCoverPreview();
+}
+
+void MainWindow::updateCoverPreview() {
+    if (!m_hasDevice) {
+        m_coverPreview->setPixmap(QPixmap());
+        m_coverPreview->setText("-");
+        m_coverCaption->clear();
+        return;
+    }
+
+    QPixmap pm;
+    QString caption;
+    if (const auto trk = selectedTrack(); trk.has_value()) {
+        caption = QString("%1\n%2").arg(trk->title, trk->artist);
+        if (trk->hasArtwork) {
+            pm = loadTrackCoverPixmap(m_mountPath, trk->id);
+        }
+    } else if (!m_selectedAlbum.isEmpty()) {
+        caption = m_selectedAlbum;
+        for (const auto &t : m_tracks) {
+            const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
+            if (alb == m_selectedAlbum && t.hasArtwork) {
+                pm = loadTrackCoverPixmap(m_mountPath, t.id);
+                break;
+            }
+        }
+    } else if (!m_tracks.isEmpty()) {
+        for (const auto &t : m_tracks) {
+            if (t.hasArtwork) {
+                pm = loadTrackCoverPixmap(m_mountPath, t.id);
+                caption = t.album;
+                break;
+            }
+        }
+    }
+
+    if (pm.isNull()) {
+        m_coverPreview->setPixmap(QPixmap());
+        m_coverPreview->setText(trText(m_lang, "lbl.no_art"));
+    } else {
+        m_coverPreview->setText(QString());
+        m_coverPreview->setPixmap(pm.scaled(80, 80, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+    m_coverCaption->setText(caption);
 }
 
 void MainWindow::updateActionStates() {
@@ -579,6 +645,7 @@ void MainWindow::updateActionStates() {
 
     m_actOpen->setEnabled(!m_busy);
     m_actRefresh->setEnabled(!m_busy);
+    m_actEject->setEnabled(m_hasDevice && !m_busy);
     m_formatCombo->setEnabled(!m_busy);
     m_actAddMusic->setEnabled(canWrite);
     m_actCreateAlbum->setEnabled(canWrite);
@@ -610,6 +677,39 @@ void MainWindow::openMountFolder() {
         m_statusMsg.clear();
         reloadDevice();
     }
+}
+
+void MainWindow::ejectDevice() {
+    if (!m_hasDevice || m_busy || m_mountPath.isEmpty()) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    std::thread([this, mp]() {
+        char *err = nullptr;
+        const int32_t rc = poddrop_eject_device(mp.constData(), &err);
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                if (rc == 0) {
+                    m_mountPath.clear();
+                    m_selectedAlbum.clear();
+                    m_statusMsg = trText(m_lang, "lbl.ejected");
+                } else {
+                    m_statusMsg = errMsg;
+                }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
 }
 
 void MainWindow::addMusicFiles() {
@@ -648,6 +748,7 @@ void MainWindow::editSelectedAlbum() {
 
     AlbumInfoSummary summary{};
     summary.album = m_selectedAlbum;
+    uint64_t coverTrackId = 0;
     for (const auto &t : m_tracks) {
         const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
         if (alb != m_selectedAlbum) continue;
@@ -657,12 +758,16 @@ void MainWindow::editSelectedAlbum() {
         if (summary.artist.isEmpty() && !t.artist.isEmpty()) summary.artist = t.artist;
         if (summary.genre.isEmpty() && !t.genre.isEmpty()) summary.genre = t.genre;
         if (summary.year == 0 && t.year > 0) summary.year = t.year;
-        if (t.hasArtwork) summary.hasArtwork = true;
+        if (t.hasArtwork) {
+            summary.hasArtwork = true;
+            if (coverTrackId == 0) coverTrackId = t.id;
+        }
     }
     if (summary.trackCount == 0) return;
 
     const bool canWrite = !m_device.isReadOnly && !m_busy;
-    const auto editedOpt = runAlbumEditorDialog(this, m_lang, summary, canWrite);
+    const QPixmap currentCover = coverTrackId > 0 ? loadTrackCoverPixmap(m_mountPath, coverTrackId) : QPixmap();
+    const auto editedOpt = runAlbumEditorDialog(this, m_lang, summary, currentCover, canWrite);
     if (!editedOpt.has_value() || !canWrite) return;
 
     m_busy = true;
@@ -720,7 +825,8 @@ void MainWindow::editSelectedTrack() {
     const auto trackOpt = selectedTrack();
     if (!trackOpt.has_value()) return;
     const bool canWrite = m_hasDevice && !m_device.isReadOnly && !m_busy;
-    const auto editedOpt = runTrackEditorDialog(this, m_lang, *trackOpt, canWrite);
+    const QPixmap currentCover = trackOpt->hasArtwork ? loadTrackCoverPixmap(m_mountPath, trackOpt->id) : QPixmap();
+    const auto editedOpt = runTrackEditorDialog(this, m_lang, *trackOpt, currentCover, canWrite);
     if (!editedOpt.has_value() || !canWrite) return;
 
     m_busy = true;

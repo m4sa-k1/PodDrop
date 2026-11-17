@@ -9,7 +9,7 @@ use poddrop_core::backend::{
     IpodBackend, TransferTrackRequest, UpdateAlbumRequest, UpdateTrackRequest,
 };
 use poddrop_core::backup::default_backup_root;
-use poddrop_core::gpod::{discover_mounted_ipods, LibgpodBackend};
+use poddrop_core::gpod::{discover_mounted_ipods, eject_ipod, LibgpodBackend};
 use poddrop_core::media::TranscodeFormat;
 use poddrop_core::APP_VERSION;
 
@@ -365,6 +365,74 @@ pub unsafe extern "C" fn poddrop_remove_track(
             set_err(out_err, &e.to_string());
             -1
         }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_get_track_artwork_png(
+    mount_path: *const c_char,
+    track_id: u64,
+    out_data: *mut *mut u8,
+    out_len: *mut usize,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    if out_data.is_null() || out_len.is_null() {
+        set_err(out_err, "Null output pointer");
+        return -1;
+    }
+    unsafe {
+        *out_data = ptr::null_mut();
+        *out_len = 0;
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Invalid mount_path");
+        return -1;
+    };
+
+    match LibgpodBackend::new().get_track_artwork_png(Path::new(&mp), track_id) {
+        Ok(Some(bytes)) if !bytes.is_empty() => {
+            let len = bytes.len();
+            let mut boxed = bytes.into_boxed_slice();
+            let ptr = boxed.as_mut_ptr();
+            std::mem::forget(boxed);
+            unsafe {
+                *out_data = ptr;
+                *out_len = len;
+            }
+            0
+        }
+        Ok(_) => 0,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_eject_device(
+    mount_path: *const c_char,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Invalid mount_path");
+        return -1;
+    };
+    match eject_ipod(Path::new(&mp)) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_free_bytes(data: *mut u8, len: usize) {
+    if !data.is_null() && len > 0 {
+        drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, len)) });
     }
 }
 

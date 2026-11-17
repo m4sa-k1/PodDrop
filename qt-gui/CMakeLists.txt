@@ -7,7 +7,7 @@ set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(PkgConfig REQUIRED)
-pkg_check_modules(GPOD REQUIRED IMPORTED_TARGET libgpod-1.0 glib-2.0)
+pkg_check_modules(GPOD REQUIRED IMPORTED_TARGET libgpod-1.0 glib-2.0 gdk-pixbuf-2.0)
 
 get_filename_component(WORKSPACE_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/.." ABSOLUTE)
 

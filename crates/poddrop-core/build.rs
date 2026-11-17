@@ -17,9 +17,9 @@ fn main() {
     );
 
     let libs_out = Command::new("pkg-config")
-        .args(["--libs", "libgpod-1.0", "glib-2.0"])
+        .args(["--libs", "libgpod-1.0", "glib-2.0", "gdk-pixbuf-2.0"])
         .output()
-        .expect("Failed to execute pkg-config --libs libgpod-1.0 glib-2.0");
+        .expect("Failed to execute pkg-config for libgpod-1.0, glib-2.0, and gdk-pixbuf-2.0");
     assert!(
         libs_out.status.success(),
         "pkg-config --libs libgpod-1.0 failed: {}",

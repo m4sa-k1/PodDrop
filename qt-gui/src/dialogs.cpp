@@ -10,6 +10,53 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 
+#include "poddrop.h"
+
+namespace {
+
+QLabel *makeCoverPreviewLabel(QWidget *parent, UiLang lang) {
+    auto *lbl = new QLabel(parent);
+    lbl->setFixedSize(120, 120);
+    lbl->setAlignment(Qt::AlignCenter);
+    lbl->setFrameStyle(QFrame::Box | QFrame::Plain);
+    lbl->setText(trText(lang, "lbl.no_art"));
+    return lbl;
+}
+
+void setCoverPreview(QLabel *lbl, const QPixmap &pm, UiLang lang) {
+    if (pm.isNull()) {
+        lbl->setPixmap(QPixmap());
+        lbl->setText(trText(lang, "lbl.no_art"));
+    } else {
+        lbl->setText(QString());
+        lbl->setPixmap(pm.scaled(116, 116, Qt::KeepAspectRatio, Qt::SmoothTransformation));
+    }
+}
+
+} // namespace
+
+QPixmap loadTrackCoverPixmap(const QString &mountPath, uint64_t trackId) {
+    if (mountPath.isEmpty() || trackId == 0) {
+        return QPixmap();
+    }
+    const QByteArray mp = mountPath.toUtf8();
+    uint8_t *data = nullptr;
+    size_t len = 0;
+    char *err = nullptr;
+    if (poddrop_get_track_artwork_png(mp.constData(), trackId, &data, &len, &err) != 0) {
+        if (err) poddrop_free_string(err);
+        return QPixmap();
+    }
+    if (err) poddrop_free_string(err);
+
+    QPixmap pm;
+    if (data && len > 0) {
+        pm.loadFromData(data, static_cast<uint>(len), "PNG");
+        poddrop_free_bytes(data, len);
+    }
+    return pm;
+}
+
 std::optional<AlbumBatchInput> runCreateAlbumDialog(
     QWidget *parent,
     UiLang lang,
@@ -18,8 +65,9 @@ std::optional<AlbumBatchInput> runCreateAlbumDialog(
 ) {
     QDialog dlg(parent);
     dlg.setWindowTitle(trText(lang, "act.create_album"));
-    dlg.setMinimumWidth(440);
+    dlg.setMinimumWidth(520);
 
+    auto *previewLbl = makeCoverPreviewLabel(&dlg, lang);
     auto *albumEdit = new QLineEdit(initialAlbum, &dlg);
     auto *artistEdit = new QLineEdit(initialArtist, &dlg);
 
@@ -38,12 +86,16 @@ std::optional<AlbumBatchInput> runCreateAlbumDialog(
     form->addRow(trText(lang, "dlg.artist_name"), artistEdit);
     form->addRow(trText(lang, "dlg.cover"), coverRow);
 
+    auto *topRow = new QHBoxLayout();
+    topRow->addWidget(previewLbl, 0, Qt::AlignTop);
+    topRow->addLayout(form, 1);
+
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Cancel, &dlg);
     auto *selectBtn = buttons->addButton(trText(lang, "dlg.select_files"), QDialogButtonBox::AcceptRole);
     selectBtn->setDefault(true);
 
     auto *root = new QVBoxLayout(&dlg);
-    root->addLayout(form);
+    root->addLayout(topRow);
     root->addWidget(buttons);
 
     QObject::connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
@@ -55,11 +107,13 @@ std::optional<AlbumBatchInput> runCreateAlbumDialog(
         );
         if (!file.isEmpty()) {
             coverEdit->setText(file);
+            setCoverPreview(previewLbl, QPixmap(file), lang);
         }
     });
 
     QObject::connect(clearBtn, &QPushButton::clicked, &dlg, [&]() {
         coverEdit->clear();
+        setCoverPreview(previewLbl, QPixmap(), lang);
     });
 
     QStringList chosenFiles;
@@ -93,11 +147,15 @@ std::optional<TrackEditResult> runTrackEditorDialog(
     QWidget *parent,
     UiLang lang,
     const TrackItem &track,
+    const QPixmap &currentCover,
     bool canWrite
 ) {
     QDialog dlg(parent);
     dlg.setWindowTitle(track.title);
-    dlg.setMinimumWidth(480);
+    dlg.setMinimumWidth(560);
+
+    auto *previewLbl = makeCoverPreviewLabel(&dlg, lang);
+    setCoverPreview(previewLbl, currentCover, lang);
 
     auto *titleEdit = new QLineEdit(track.title, &dlg);
     auto *artistEdit = new QLineEdit(track.artist, &dlg);
@@ -162,13 +220,17 @@ std::optional<TrackEditResult> runTrackEditorDialog(
     form->addRow(trText(lang, "dlg.cover"), coverRow);
     form->addRow(trText(lang, "dlg.details"), detailsLbl);
 
+    auto *topRow = new QHBoxLayout();
+    topRow->addWidget(previewLbl, 0, Qt::AlignTop);
+    topRow->addLayout(form, 1);
+
     auto *buttons = new QDialogButtonBox(
         canWrite ? (QDialogButtonBox::Ok | QDialogButtonBox::Cancel) : QDialogButtonBox::Close,
         &dlg
     );
 
     auto *root = new QVBoxLayout(&dlg);
-    root->addLayout(form);
+    root->addLayout(topRow);
     root->addWidget(buttons);
 
     QObject::connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
@@ -182,6 +244,7 @@ std::optional<TrackEditResult> runTrackEditorDialog(
             selectedCover = file;
             clearArtwork = false;
             coverEdit->setText(file);
+            setCoverPreview(previewLbl, QPixmap(file), lang);
         }
     });
 
@@ -189,6 +252,7 @@ std::optional<TrackEditResult> runTrackEditorDialog(
         selectedCover.clear();
         clearArtwork = true;
         coverEdit->setText(trText(lang, "dlg.cover_remove"));
+        setCoverPreview(previewLbl, QPixmap(), lang);
     });
 
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
@@ -221,11 +285,15 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     QWidget *parent,
     UiLang lang,
     const AlbumInfoSummary &albumInfo,
+    const QPixmap &currentCover,
     bool canWrite
 ) {
     QDialog dlg(parent);
     dlg.setWindowTitle(albumInfo.album);
-    dlg.setMinimumWidth(460);
+    dlg.setMinimumWidth(540);
+
+    auto *previewLbl = makeCoverPreviewLabel(&dlg, lang);
+    setCoverPreview(previewLbl, currentCover, lang);
 
     auto *albumEdit = new QLineEdit(albumInfo.album, &dlg);
     auto *artistEdit = new QLineEdit(albumInfo.artist, &dlg);
@@ -273,13 +341,17 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     form->addRow(trText(lang, "dlg.cover"), coverRow);
     form->addRow(trText(lang, "dlg.details"), detailsLbl);
 
+    auto *topRow = new QHBoxLayout();
+    topRow->addWidget(previewLbl, 0, Qt::AlignTop);
+    topRow->addLayout(form, 1);
+
     auto *buttons = new QDialogButtonBox(
         canWrite ? (QDialogButtonBox::Ok | QDialogButtonBox::Cancel) : QDialogButtonBox::Close,
         &dlg
     );
 
     auto *root = new QVBoxLayout(&dlg);
-    root->addLayout(form);
+    root->addLayout(topRow);
     root->addWidget(buttons);
 
     QObject::connect(browseBtn, &QPushButton::clicked, &dlg, [&]() {
@@ -293,6 +365,7 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
             selectedCover = file;
             clearArtwork = false;
             coverEdit->setText(file);
+            setCoverPreview(previewLbl, QPixmap(file), lang);
         }
     });
 
@@ -300,6 +373,7 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
         selectedCover.clear();
         clearArtwork = true;
         coverEdit->setText(trText(lang, "dlg.cover_remove"));
+        setCoverPreview(previewLbl, QPixmap(), lang);
     });
 
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);

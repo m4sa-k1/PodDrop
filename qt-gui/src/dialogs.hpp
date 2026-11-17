@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QDialog>
+#include <QPixmap>
 #include <QString>
 #include <QStringList>
 #include <cstdint>
@@ -62,6 +63,8 @@ struct AlbumEditResult {
     bool clearArtwork = false;
 };
 
+QPixmap loadTrackCoverPixmap(const QString &mountPath, uint64_t trackId);
+
 std::optional<AlbumBatchInput> runCreateAlbumDialog(
     QWidget *parent,
     UiLang lang,
@@ -73,6 +76,7 @@ std::optional<TrackEditResult> runTrackEditorDialog(
     QWidget *parent,
     UiLang lang,
     const TrackItem &track,
+    const QPixmap &currentCover,
     bool canWrite
 );
 
@@ -80,5 +84,6 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     QWidget *parent,
     UiLang lang,
     const AlbumInfoSummary &albumInfo,
+    const QPixmap &currentCover,
     bool canWrite
 );
