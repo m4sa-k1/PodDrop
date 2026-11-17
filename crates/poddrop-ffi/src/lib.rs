@@ -583,7 +583,7 @@ pub unsafe extern "C" fn poddrop_create_backup(
     match poddrop_core::backup::create_prewrite_backup(Path::new(&mp), &root) {
         Ok(_) => {
             if !out_backup_time.is_null() {
-                let ts = poddrop_core::backup::latest_backup(&root)
+                let ts = poddrop_core::backup::latest_backup_for_device(Path::new(&mp), &root)
                     .map(|b| b.created_at)
                     .unwrap_or_default();
                 unsafe { *out_backup_time = to_c_char(&ts) };
@@ -594,6 +594,39 @@ pub unsafe extern "C" fn poddrop_create_backup(
             set_err(out_err, &e.to_string());
             -1
         }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_get_device_backup_info(
+    mount_path: *const c_char,
+    out_backup_time: *mut *mut c_char,
+    out_size_bytes: *mut u64,
+    out_device_count: *mut u32,
+) -> i32 {
+    if !out_backup_time.is_null() {
+        unsafe { *out_backup_time = ptr::null_mut() };
+    }
+    if !out_size_bytes.is_null() {
+        unsafe { *out_size_bytes = 0 };
+    }
+    let root = poddrop_core::backup::default_backup_root();
+    if !out_device_count.is_null() {
+        unsafe { *out_device_count = poddrop_core::backup::backed_up_device_count(&root) };
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        return -1;
+    };
+    if let Some(summary) = poddrop_core::backup::latest_backup_for_device(Path::new(&mp), &root) {
+        if !out_backup_time.is_null() {
+            unsafe { *out_backup_time = to_c_char(&summary.created_at) };
+        }
+        if !out_size_bytes.is_null() {
+            unsafe { *out_size_bytes = summary.size_bytes };
+        }
+        0
+    } else {
+        -1
     }
 }
 

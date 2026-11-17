@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Export tracks from iPod to PC (`File -> Export to PC...` and track context menu) organized as `<Artist>/<Album>/<NN> - <Title>.<ext>`.
 - Pre-transfer duplicate track check with confirmation dialog (allows adding anyway if confirmed).
 - Library filter dropdown (`All`, `Missing Tags`, `Duplicates`).
+- Multi-device isolated backup management (`backups/<device_guid>/backup_YYYY-MM-DD_HH-MM-SS`) so each iPod rotates only its own backups and restores its own database.
 
 ## [0.1.6] - 2026-11-17
 

@@ -52,11 +52,12 @@ void MainWindow::ejectDevice() {
 void MainWindow::restoreFromBackup() {
     if (!m_hasDevice || m_device.isReadOnly || m_busy || m_mountPath.isEmpty()) return;
 
-    PodDropSystemInfo info{};
-    poddrop_get_system_info(&info);
-    const QString lastTime = info.last_backup_time ? QString::fromUtf8(info.last_backup_time) : QString();
-    const uint64_t sizeBytes = info.last_backup_size_bytes;
-    poddrop_free_system_info(&info);
+    const QByteArray mp = m_mountPath.toUtf8();
+    char *rawTime = nullptr;
+    uint64_t sizeBytes = 0;
+    uint32_t devCount = 0;
+    poddrop_get_device_backup_info(mp.constData(), &rawTime, &sizeBytes, &devCount);
+    const QString lastTime = takeCString(rawTime);
 
     if (lastTime.isEmpty()) {
         QMessageBox::information(
@@ -80,7 +81,6 @@ void MainWindow::restoreFromBackup() {
     updateActionStates();
     QApplication::setOverrideCursor(Qt::WaitCursor);
 
-    const QByteArray mp = m_mountPath.toUtf8();
     std::thread([this, mp]() {
         char *restoredTime = nullptr;
         char *err = nullptr;

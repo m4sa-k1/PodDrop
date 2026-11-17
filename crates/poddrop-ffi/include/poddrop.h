@@ -144,6 +144,12 @@ int32_t poddrop_validate_audio(
 void poddrop_get_system_info(PodDropSystemInfo *out_info);
 void poddrop_free_system_info(PodDropSystemInfo *info);
 int32_t poddrop_create_backup(const char *mount_path, char **out_backup_time, char **out_err);
+int32_t poddrop_get_device_backup_info(
+    const char *mount_path,
+    char **out_backup_time,
+    uint64_t *out_size_bytes,
+    uint32_t *out_device_count
+);
 int32_t poddrop_restore_latest_backup(const char *mount_path, char **out_restored_time, char **out_err);
 
 void poddrop_free_string(char *s);
