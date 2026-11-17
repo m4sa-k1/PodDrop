@@ -17,6 +17,7 @@ pub enum DeviceModel {
     Nano3G,
     Nano4G,
     Nano5G,
+    Unknown,
 }
 
 impl DeviceModel {
@@ -37,6 +38,7 @@ impl DeviceModel {
             Self::Nano3G => "iPod Nano (3rd Gen)",
             Self::Nano4G => "iPod Nano (4th Gen)",
             Self::Nano5G => "iPod Nano (5th Gen)",
+            Self::Unknown => "Unknown / Unidentified iPod",
         }
     }
 
@@ -44,7 +46,12 @@ impl DeviceModel {
     pub const fn supports_artwork(self) -> bool {
         !matches!(
             self,
-            Self::Classic1G | Self::Classic2G | Self::Classic3G | Self::Mini1G | Self::Mini2G
+            Self::Classic1G
+                | Self::Classic2G
+                | Self::Classic3G
+                | Self::Mini1G
+                | Self::Mini2G
+                | Self::Unknown
         )
     }
 }
@@ -57,12 +64,28 @@ pub enum FilesystemType {
     Unknown,
 }
 
+impl FilesystemType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Fat32 => "FAT32 (vfat)",
+            Self::HfsPlus => "HFS+",
+            Self::Unknown => "Unknown",
+        }
+    }
+}
+
 /// Basic metadata about a connected iPod device.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct DeviceInfo {
     pub mount_path: PathBuf,
     pub model: DeviceModel,
+    pub model_number: Option<String>,
+    pub capacity_gb: Option<f64>,
     pub filesystem: FilesystemType,
+    pub is_read_only: bool,
     pub has_sysinfo_extended: bool,
     pub firewire_guid: Option<String>,
+    pub supports_artwork: bool,
+    pub track_count: u32,
+    pub playlist_count: u32,
 }

@@ -3,6 +3,7 @@
 pub mod backend;
 pub mod device;
 pub mod error;
+pub mod gpod;
 pub mod i18n;
 
 pub const APP_NAME: &str = "PodDrop";
