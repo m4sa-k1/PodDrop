@@ -12,3 +12,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Architecture and phased roadmap documentation (`docs/architecture.md`, `docs/roadmap.md`).
 - GitHub Actions CI workflow (`fmt`, `clippy`, `test`).
 - Minimal core models, error types, and bilingual (`en`/`ja`) localization scaffolding.
+- Read-only `libgpod` FFI backend and filesystem/mount detection (`poddrop-core`).
+- Built-in SCSI VPD (`0xC0`+) `SysInfoExtended` reader via `SG_IO` (`poddrop-core`, `poddrop-cli`).
+- `poddrop-cli inspect` and `poddrop-cli read-sysinfo` commands.

@@ -8,11 +8,12 @@ We follow a strict, milestone-driven workflow. Each phase must be verified befor
 - [x] Bilingual (`en` / `ja`) localization foundation
 - [x] GitHub Actions CI (`fmt`, `clippy`, `test`)
 
-## Phase 1: Device Detection & Read-Only Verification (`v0.1.0-alpha.1`)
-- [ ] Install and verify `libgpod` FFI bindings (`poddrop-core`)
-- [ ] Implement safe device mount detection & filesystem check (FAT32 / HFS+ warning)
-- [ ] Read-only inspection of `SysInfo` / `SysInfoExtended` (FireWire GUID), `iTunesDB`, and `ArtworkDB`
-- [ ] **Hardware Verification**: Inspect real **iPod Nano 5G** via `poddrop-cli` without modifying any files
+## Phase 1: Device Detection & Read-Only Verification (`v0.1.0-alpha.1`) — Completed
+- [x] Install and verify `libgpod` FFI bindings (`poddrop-core`)
+- [x] Implement safe device mount detection & filesystem check (FAT32 / HFS+ warning)
+- [x] Read-only inspection of `SysInfo` / `SysInfoExtended` (FireWire GUID), `iTunesDB`, and `ArtworkDB`
+- [x] Built-in SCSI VPD (`SG_IO`) `SysInfoExtended` reader (independent of broken `ipod-read-sysinfo-extended`)
+- [x] **Hardware Verification**: Inspected real iPod Nano 4G (`B598`, 8.0 GB) via `poddrop-cli` without modifying any files on device
 
 ## Phase 2: Safe Transfer & Artwork Registration (`v0.1.0-alpha.2`)
 - [ ] Pre-write automatic backup of `/iPod_Control/iTunes/` and `/iPod_Control/Artwork/`
