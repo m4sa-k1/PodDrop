@@ -25,9 +25,13 @@ typedef struct {
     char *title;
     char *artist;
     char *album;
+    char *genre;
     int32_t track_number;
     int32_t disc_number;
+    int32_t year;
     int32_t duration_ms;
+    int32_t bitrate_kbps;
+    uint32_t size_bytes;
     int32_t has_artwork;
 } PodDropGpodTrack;
 
@@ -53,6 +57,7 @@ void poddrop_gpod_free_tracks(PodDropGpodTrack *tracks, size_t count) {
         g_free(tracks[i].title);
         g_free(tracks[i].artist);
         g_free(tracks[i].album);
+        g_free(tracks[i].genre);
     }
     g_free(tracks);
 }
@@ -141,9 +146,13 @@ int poddrop_gpod_list_tracks(
         arr[idx].title = dup_cstr_or_empty(tr->title);
         arr[idx].artist = dup_cstr_or_empty(tr->artist);
         arr[idx].album = dup_cstr_or_empty(tr->album);
+        arr[idx].genre = dup_cstr_or_empty(tr->genre);
         arr[idx].track_number = tr->track_nr;
         arr[idx].disc_number = tr->cd_nr;
+        arr[idx].year = tr->year;
         arr[idx].duration_ms = tr->tracklen;
+        arr[idx].bitrate_kbps = tr->bitrate;
+        arr[idx].size_bytes = tr->size;
         arr[idx].has_artwork = (tr->artwork && tr->artwork->artwork_size > 0) ? 1 : 0;
         idx++;
     }
