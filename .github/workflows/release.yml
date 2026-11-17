@@ -62,6 +62,8 @@ jobs:
           install -Dm755 "${DIR}/files/bin/poddrop-cli" "${PREFIX}/bin/poddrop-cli"
           install -Dm644 "${DIR}/files/share/applications/io.github.m4sa_k1.PodDrop.desktop" \
               "${PREFIX}/share/applications/io.github.m4sa_k1.PodDrop.desktop"
+          sed -i "s|^Exec=.*|Exec=${PREFIX}/bin/poddrop-gui|" \
+              "${PREFIX}/share/applications/io.github.m4sa_k1.PodDrop.desktop"
           install -Dm644 "${DIR}/files/share/icons/hicolor/scalable/apps/io.github.m4sa_k1.PodDrop.svg" \
               "${PREFIX}/share/icons/hicolor/scalable/apps/io.github.m4sa_k1.PodDrop.svg"
           install -Dm644 "${DIR}/files/share/icons/hicolor/128x128/apps/io.github.m4sa_k1.PodDrop.png" \

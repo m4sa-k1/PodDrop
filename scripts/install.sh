@@ -69,6 +69,7 @@ cmake --build "${BUILD_DIR}" -j"$(nproc)"
 echo "==> Installing to ${PREFIX}..."
 cmake --install "${BUILD_DIR}" --prefix "${PREFIX}"
 install -Dm755 target/release/poddrop-cli "${PREFIX}/bin/poddrop-cli"
+sed -i "s|^Exec=.*|Exec=${PREFIX}/bin/poddrop-gui|" "${PREFIX}/share/applications/io.github.m4sa_k1.PodDrop.desktop"
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
     gtk-update-icon-cache -f -t "${PREFIX}/share/icons/hicolor" >/dev/null 2>&1 || true
