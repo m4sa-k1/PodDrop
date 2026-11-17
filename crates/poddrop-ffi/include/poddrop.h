@@ -86,6 +86,14 @@ typedef struct {
     char *backup_dir;
 } PodDropSystemInfo;
 
+typedef struct {
+    uint64_t id;
+    char *name;
+    int32_t is_smart;
+    uint32_t *track_ids;
+    size_t track_count;
+} PodDropPlaylist;
+
 const char *poddrop_app_version(void);
 char *poddrop_discover_first_ipod(void);
 int32_t poddrop_inspect_device(const char *mount_path, PodDropDeviceInfo *out_info, char **out_err);
@@ -138,6 +146,40 @@ void poddrop_free_string(char *s);
 void poddrop_free_bytes(uint8_t *data, size_t len);
 void poddrop_free_device_info(PodDropDeviceInfo *info);
 void poddrop_free_tracks(PodDropTrack *tracks, size_t count);
+
+int32_t poddrop_list_playlists(
+    const char *mount_path,
+    PodDropPlaylist **out_playlists,
+    size_t *out_count,
+    char **out_err
+);
+void poddrop_free_playlists(PodDropPlaylist *playlists, size_t count);
+int32_t poddrop_create_playlist(
+    const char *mount_path,
+    const char *name,
+    const uint32_t *track_ids,
+    size_t track_count,
+    uint64_t *out_playlist_id,
+    char **out_err
+);
+int32_t poddrop_update_playlist(
+    const char *mount_path,
+    uint64_t playlist_id,
+    const char *new_name,
+    const uint32_t *track_ids,
+    size_t track_count,
+    int32_t replace_tracks,
+    char **out_err
+);
+int32_t poddrop_add_tracks_to_playlist(
+    const char *mount_path,
+    uint64_t playlist_id,
+    const uint32_t *track_ids,
+    size_t track_count,
+    uint32_t *out_added_count,
+    char **out_err
+);
+int32_t poddrop_remove_playlist(const char *mount_path, uint64_t playlist_id, char **out_err);
 
 #ifdef __cplusplus
 }

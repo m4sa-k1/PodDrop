@@ -4,6 +4,7 @@
 #include <QPixmap>
 #include <QString>
 #include <QStringList>
+#include <QVector>
 #include <cstdint>
 #include <optional>
 
@@ -99,6 +100,40 @@ std::optional<bool> runRemoveAlbumDialog(
     UiLang lang,
     const QString &albumName,
     int trackCount
+);
+
+struct PlaylistItem {
+    uint64_t id = 0;
+    QString name;
+    bool isSmart = false;
+    QVector<uint32_t> trackIds;
+};
+
+struct PlaylistEditResult {
+    QString name;
+    QVector<uint32_t> trackIds;
+};
+
+struct PlaylistPickResult {
+    bool createNew = false;
+    uint64_t playlistId = 0;
+    QString newName;
+};
+
+std::optional<PlaylistEditResult> runPlaylistEditorDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QString &initialName,
+    const QVector<uint32_t> &initialTrackIds,
+    const QVector<TrackItem> &allTracks,
+    bool isNew,
+    bool canWrite
+);
+
+std::optional<PlaylistPickResult> runPickPlaylistDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QVector<PlaylistItem> &playlists
 );
 
 void showSystemInfoDialog(QWidget *parent, UiLang lang);

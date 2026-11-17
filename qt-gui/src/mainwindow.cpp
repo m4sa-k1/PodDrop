@@ -25,12 +25,14 @@
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
+#include <QTabWidget>
 #include <QTableWidget>
 #include <QToolBar>
 #include <QToolButton>
 #include <QVBoxLayout>
 #include <map>
 #include <thread>
+#include <unordered_map>
 
 #include "poddrop.h"
 
@@ -86,6 +88,11 @@ void MainWindow::setupUi() {
     m_actCreateAlbum = m_editMenu->addAction(st->standardIcon(QStyle::SP_DirIcon), QString());
     m_actEditAlbum = m_editMenu->addAction(QString());
     m_actRemoveAlbum = m_editMenu->addAction(QString());
+    m_editMenu->addSeparator();
+    m_actNewPlaylist = m_editMenu->addAction(st->standardIcon(QStyle::SP_FileDialogNewFolder), QString());
+    m_actEditPlaylist = m_editMenu->addAction(QString());
+    m_actRemovePlaylist = m_editMenu->addAction(QString());
+    m_actAddToPlaylist = m_editMenu->addAction(QString());
     m_editMenu->addSeparator();
     m_actEditTrack = m_editMenu->addAction(QString());
     m_actRemoveTrack = m_editMenu->addAction(st->standardIcon(QStyle::SP_TrashIcon), QString());
@@ -172,13 +179,16 @@ void MainWindow::setupUi() {
     devLayout->addWidget(m_storageLabel);
     devLayout->addWidget(m_storageBar);
 
-    m_albumsGroup = new QGroupBox(leftWidget);
-    auto *albLayout = new QVBoxLayout(m_albumsGroup);
-    m_albumList = new QListWidget(m_albumsGroup);
+    m_navTabs = new QTabWidget(leftWidget);
+
+    m_albumsTab = new QWidget(m_navTabs);
+    auto *albLayout = new QVBoxLayout(m_albumsTab);
+    albLayout->setContentsMargins(6, 6, 6, 6);
+    m_albumList = new QListWidget(m_albumsTab);
     m_albumList->setContextMenuPolicy(Qt::CustomContextMenu);
-    m_addToAlbumBtn = new QPushButton(m_albumsGroup);
-    m_editAlbumBtn = new QPushButton(m_albumsGroup);
-    m_removeAlbumBtn = new QPushButton(m_albumsGroup);
+    m_addToAlbumBtn = new QPushButton(m_albumsTab);
+    m_editAlbumBtn = new QPushButton(m_albumsTab);
+    m_removeAlbumBtn = new QPushButton(m_albumsTab);
     auto *albBtnRow = new QHBoxLayout();
     albBtnRow->addWidget(m_editAlbumBtn);
     albBtnRow->addWidget(m_removeAlbumBtn);
@@ -186,8 +196,26 @@ void MainWindow::setupUi() {
     albLayout->addWidget(m_addToAlbumBtn);
     albLayout->addLayout(albBtnRow);
 
+    m_playlistsTab = new QWidget(m_navTabs);
+    auto *plLayout = new QVBoxLayout(m_playlistsTab);
+    plLayout->setContentsMargins(6, 6, 6, 6);
+    m_playlistList = new QListWidget(m_playlistsTab);
+    m_playlistList->setContextMenuPolicy(Qt::CustomContextMenu);
+    m_newPlaylistBtn = new QPushButton(m_playlistsTab);
+    m_editPlaylistBtn = new QPushButton(m_playlistsTab);
+    m_removePlaylistBtn = new QPushButton(m_playlistsTab);
+    auto *plBtnRow = new QHBoxLayout();
+    plBtnRow->addWidget(m_editPlaylistBtn);
+    plBtnRow->addWidget(m_removePlaylistBtn);
+    plLayout->addWidget(m_playlistList, 1);
+    plLayout->addWidget(m_newPlaylistBtn);
+    plLayout->addLayout(plBtnRow);
+
+    m_navTabs->addTab(m_albumsTab, QString());
+    m_navTabs->addTab(m_playlistsTab, QString());
+
     leftLayout->addWidget(m_deviceGroup);
-    leftLayout->addWidget(m_albumsGroup, 1);
+    leftLayout->addWidget(m_navTabs, 1);
 
     auto *previewRow = new QHBoxLayout();
     m_coverPreview = new QLabel(leftWidget);
@@ -268,6 +296,14 @@ void MainWindow::setupUi() {
     connect(m_actCreateAlbum, &QAction::triggered, this, [this]() { createAlbum(); });
     connect(m_actEditAlbum, &QAction::triggered, this, &MainWindow::editSelectedAlbum);
     connect(m_actRemoveAlbum, &QAction::triggered, this, &MainWindow::removeSelectedAlbum);
+    connect(m_actNewPlaylist, &QAction::triggered, this, [this]() { createPlaylist(); });
+    connect(m_actEditPlaylist, &QAction::triggered, this, &MainWindow::editSelectedPlaylist);
+    connect(m_actRemovePlaylist, &QAction::triggered, this, &MainWindow::removeSelectedPlaylist);
+    connect(m_actAddToPlaylist, &QAction::triggered, this, [this]() {
+        if (const auto trk = selectedTrack(); trk.has_value()) {
+            addTracksToPlaylistPrompt({static_cast<uint32_t>(trk->id)});
+        }
+    });
     connect(m_actEditTrack, &QAction::triggered, this, &MainWindow::editSelectedTrack);
     connect(m_actRemoveTrack, &QAction::triggered, this, &MainWindow::removeSelectedTrack);
 
@@ -275,12 +311,14 @@ void MainWindow::setupUi() {
         m_lang = UiLang::En;
         applyTranslations();
         populateAlbums();
+        populatePlaylists();
         populateTracks();
     });
     connect(m_actLangJa, &QAction::triggered, this, [this]() {
         m_lang = UiLang::Ja;
         applyTranslations();
         populateAlbums();
+        populatePlaylists();
         populateTracks();
     });
     connect(m_actThemeLight, &QAction::triggered, this, [this]() {
@@ -298,9 +336,15 @@ void MainWindow::setupUi() {
     connect(m_addToAlbumBtn, &QPushButton::clicked, this, &MainWindow::addToSelectedAlbum);
     connect(m_editAlbumBtn, &QPushButton::clicked, this, &MainWindow::editSelectedAlbum);
     connect(m_removeAlbumBtn, &QPushButton::clicked, this, &MainWindow::removeSelectedAlbum);
+    connect(m_newPlaylistBtn, &QPushButton::clicked, this, [this]() { createPlaylist(); });
+    connect(m_editPlaylistBtn, &QPushButton::clicked, this, &MainWindow::editSelectedPlaylist);
+    connect(m_removePlaylistBtn, &QPushButton::clicked, this, &MainWindow::removeSelectedPlaylist);
     connect(m_editBtn, &QPushButton::clicked, this, &MainWindow::editSelectedTrack);
     connect(m_removeBtn, &QPushButton::clicked, this, &MainWindow::removeSelectedTrack);
 
+    connect(m_navTabs, &QTabWidget::currentChanged, this, [this](int) {
+        populateTracks();
+    });
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() { populateTracks(); });
     connect(m_albumList, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row <= 0) {
@@ -320,7 +364,44 @@ void MainWindow::setupUi() {
         QMenu menu(this);
         menu.addAction(m_actEditAlbum);
         menu.addAction(m_actRemoveAlbum);
+        if (m_hasDevice && !m_device.isReadOnly && !m_busy) {
+            menu.addSeparator();
+            QAction *addAlbPl = menu.addAction(trText(m_lang, "act.add_to_playlist"));
+            connect(addAlbPl, &QAction::triggered, this, [this]() {
+                QVector<uint32_t> ids;
+                for (const auto &t : m_tracks) {
+                    const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
+                    if (alb == m_selectedAlbum) {
+                        ids.push_back(static_cast<uint32_t>(t.id));
+                    }
+                }
+                if (!ids.isEmpty()) {
+                    addTracksToPlaylistPrompt(ids);
+                }
+            });
+        }
         menu.exec(m_albumList->viewport()->mapToGlobal(pos));
+    });
+
+    connect(m_playlistList, &QListWidget::currentRowChanged, this, [this](int row) {
+        if (row < 0) {
+            m_selectedPlaylistId = 0;
+        } else if (auto *item = m_playlistList->item(row)) {
+            m_selectedPlaylistId = item->data(Qt::UserRole).toULongLong();
+        }
+        populateTracks();
+    });
+    connect(m_playlistList, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem *) {
+        editSelectedPlaylist();
+    });
+    connect(m_playlistList, &QListWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
+        QMenu menu(this);
+        menu.addAction(m_actNewPlaylist);
+        if (selectedPlaylist().has_value()) {
+            menu.addAction(m_actEditPlaylist);
+            menu.addAction(m_actRemovePlaylist);
+        }
+        menu.exec(m_playlistList->viewport()->mapToGlobal(pos));
     });
 
     connect(m_trackTable, &QTableWidget::itemSelectionChanged, this, [this]() {
@@ -334,6 +415,7 @@ void MainWindow::setupUi() {
         if (!selectedTrack().has_value()) return;
         QMenu menu(this);
         menu.addAction(m_actEditTrack);
+        menu.addAction(m_actAddToPlaylist);
         menu.addAction(m_actRemoveTrack);
         menu.exec(m_trackTable->viewport()->mapToGlobal(pos));
     });
@@ -387,6 +469,10 @@ void MainWindow::applyTranslations() {
     m_actCreateAlbum->setText(trText(m_lang, "act.create_album"));
     m_actEditAlbum->setText(trText(m_lang, "act.edit_album"));
     m_actRemoveAlbum->setText(trText(m_lang, "act.remove_album"));
+    m_actNewPlaylist->setText(trText(m_lang, "act.new_playlist"));
+    m_actEditPlaylist->setText(trText(m_lang, "act.edit_playlist"));
+    m_actRemovePlaylist->setText(trText(m_lang, "act.remove_playlist"));
+    m_actAddToPlaylist->setText(trText(m_lang, "act.add_to_playlist"));
     m_actEditTrack->setText(trText(m_lang, "act.edit_track"));
     m_actRemoveTrack->setText(trText(m_lang, "act.remove_track"));
     m_actLangEn->setText(trText(m_lang, "act.lang_en"));
@@ -396,11 +482,15 @@ void MainWindow::applyTranslations() {
 
     m_roLabel->setText(trText(m_lang, "lbl.readonly"));
     m_deviceGroup->setTitle(trText(m_lang, "grp.device"));
-    m_albumsGroup->setTitle(trText(m_lang, "grp.albums"));
+    m_navTabs->setTabText(0, trText(m_lang, "grp.albums"));
+    m_navTabs->setTabText(1, trText(m_lang, "grp.playlists"));
     m_libraryGroup->setTitle(trText(m_lang, "grp.library"));
     m_addToAlbumBtn->setText(trText(m_lang, "act.add_to_album"));
     m_editAlbumBtn->setText(trText(m_lang, "act.edit_album"));
     m_removeAlbumBtn->setText(trText(m_lang, "act.remove_album"));
+    m_newPlaylistBtn->setText(trText(m_lang, "act.new_playlist"));
+    m_editPlaylistBtn->setText(trText(m_lang, "act.edit_playlist"));
+    m_removePlaylistBtn->setText(trText(m_lang, "act.remove_playlist"));
 
     m_searchEdit->setPlaceholderText(trText(m_lang, "lbl.search_hint"));
     m_editBtn->setText(trText(m_lang, "act.edit_track"));
@@ -453,6 +543,7 @@ void MainWindow::applyTranslations() {
 void MainWindow::reloadDevice() {
     m_hasDevice = false;
     m_tracks.clear();
+    m_playlists.clear();
 
     if (!m_mountPath.isEmpty()) {
         const QByteArray mpBytes = m_mountPath.toUtf8();
@@ -501,6 +592,29 @@ void MainWindow::reloadDevice() {
             } else if (listErr) {
                 m_statusMsg = takeCString(listErr);
             }
+
+            PodDropPlaylist *rawPls = nullptr;
+            size_t plCount = 0;
+            char *plErr = nullptr;
+            if (poddrop_list_playlists(mpBytes.constData(), &rawPls, &plCount, &plErr) == 0) {
+                for (size_t i = 0; i < plCount; ++i) {
+                    const auto &p = rawPls[i];
+                    PlaylistItem item;
+                    item.id = p.id;
+                    item.name = QString::fromUtf8(p.name ? p.name : "");
+                    item.isSmart = p.is_smart != 0;
+                    if (p.track_ids && p.track_count > 0) {
+                        item.trackIds.reserve(static_cast<int>(p.track_count));
+                        for (size_t j = 0; j < p.track_count; ++j) {
+                            item.trackIds.push_back(p.track_ids[j]);
+                        }
+                    }
+                    m_playlists.push_back(std::move(item));
+                }
+                poddrop_free_playlists(rawPls, plCount);
+            } else if (plErr) {
+                takeCString(plErr);
+            }
         } else if (err) {
             m_statusMsg = takeCString(err);
         }
@@ -509,6 +623,7 @@ void MainWindow::reloadDevice() {
     m_roLabel->setVisible(m_hasDevice && m_device.isReadOnly);
     applyTranslations();
     populateAlbums();
+    populatePlaylists();
     populateTracks();
     updateActionStates();
 }
@@ -559,16 +674,67 @@ void MainWindow::populateAlbums() {
     }
 }
 
+void MainWindow::populatePlaylists() {
+    m_playlistList->blockSignals(true);
+    m_playlistList->clear();
+
+    int selectRow = -1;
+    for (int i = 0; i < m_playlists.size(); ++i) {
+        const auto &pl = m_playlists[i];
+        QString label = QString("%1 (%2)").arg(pl.name).arg(pl.trackIds.size());
+        if (pl.isSmart) {
+            label += QString(" [%1]").arg(trText(m_lang, "lbl.smart_pl"));
+        }
+        auto *item = new QListWidgetItem(label);
+        item->setData(Qt::UserRole, static_cast<qulonglong>(pl.id));
+        m_playlistList->addItem(item);
+        if (pl.id == m_selectedPlaylistId) {
+            selectRow = i;
+        }
+    }
+    if (selectRow >= 0) {
+        m_playlistList->setCurrentRow(selectRow);
+    } else if (!m_playlists.isEmpty()) {
+        m_selectedPlaylistId = m_playlists.first().id;
+        m_playlistList->setCurrentRow(0);
+    } else {
+        m_selectedPlaylistId = 0;
+    }
+    m_playlistList->blockSignals(false);
+}
+
 void MainWindow::populateTracks() {
     const QString query = m_searchEdit->text().trimmed().toLower();
     m_trackTable->setSortingEnabled(false);
     m_trackTable->setRowCount(0);
 
-    for (const auto &t : m_tracks) {
-        const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
-        if (!m_selectedAlbum.isEmpty() && alb != m_selectedAlbum) {
-            continue;
+    QVector<const TrackItem *> displayTracks;
+    const bool playlistMode = (m_navTabs && m_navTabs->currentIndex() == 1);
+    if (playlistMode) {
+        if (const auto plOpt = selectedPlaylist(); plOpt.has_value()) {
+            std::unordered_map<uint32_t, const TrackItem *> byId;
+            byId.reserve(static_cast<size_t>(m_tracks.size()));
+            for (const auto &t : m_tracks) {
+                byId[static_cast<uint32_t>(t.id)] = &t;
+            }
+            for (uint32_t tid : plOpt->trackIds) {
+                if (auto it = byId.find(tid); it != byId.end()) {
+                    displayTracks.push_back(it->second);
+                }
+            }
         }
+    } else {
+        for (const auto &t : m_tracks) {
+            const QString alb = t.album.isEmpty() ? QStringLiteral("Unknown Album") : t.album;
+            if (!m_selectedAlbum.isEmpty() && alb != m_selectedAlbum) {
+                continue;
+            }
+            displayTracks.push_back(&t);
+        }
+    }
+
+    for (const TrackItem *tp : displayTracks) {
+        const TrackItem &t = *tp;
         if (!query.isEmpty()) {
             const bool matched = t.title.toLower().contains(query) ||
                                  t.artist.toLower().contains(query) ||
@@ -581,7 +747,8 @@ void MainWindow::populateTracks() {
 
         const uint32_t sec = t.durationMs / 1000;
         auto *numItem = new QTableWidgetItem();
-        numItem->setData(Qt::DisplayRole, t.trackNumber > 0 ? static_cast<int>(t.trackNumber) : row + 1);
+        const int displayNum = (!playlistMode && t.trackNumber > 0) ? static_cast<int>(t.trackNumber) : row + 1;
+        numItem->setData(Qt::DisplayRole, displayNum);
         numItem->setData(Qt::UserRole, static_cast<qulonglong>(t.id));
         numItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
 
@@ -661,6 +828,9 @@ void MainWindow::updateActionStates() {
     const bool canWrite = m_hasDevice && !m_device.isReadOnly && !m_busy;
     const bool hasSel = selectedTrack().has_value();
     const bool hasAlbumSel = !m_selectedAlbum.isEmpty();
+    const auto plOpt = selectedPlaylist();
+    const bool hasPlSel = plOpt.has_value();
+    const bool canEditPl = hasPlSel && !plOpt->isSmart;
 
     m_actOpen->setEnabled(!m_busy);
     m_actRefresh->setEnabled(!m_busy);
@@ -673,10 +843,25 @@ void MainWindow::updateActionStates() {
     m_editAlbumBtn->setEnabled(m_hasDevice && hasAlbumSel && !m_busy);
     m_actRemoveAlbum->setEnabled(canWrite && hasAlbumSel);
     m_removeAlbumBtn->setEnabled(canWrite && hasAlbumSel);
+    m_actNewPlaylist->setEnabled(canWrite);
+    m_newPlaylistBtn->setEnabled(canWrite);
+    m_actEditPlaylist->setEnabled(m_hasDevice && canEditPl && !m_busy);
+    m_editPlaylistBtn->setEnabled(m_hasDevice && canEditPl && !m_busy);
+    m_actRemovePlaylist->setEnabled(canWrite && hasPlSel);
+    m_removePlaylistBtn->setEnabled(canWrite && hasPlSel);
+    m_actAddToPlaylist->setEnabled(canWrite && hasSel);
     m_actEditTrack->setEnabled(m_hasDevice && hasSel && !m_busy);
     m_editBtn->setEnabled(m_hasDevice && hasSel && !m_busy);
     m_actRemoveTrack->setEnabled(canWrite && hasSel);
     m_removeBtn->setEnabled(canWrite && hasSel);
+}
+
+std::optional<PlaylistItem> MainWindow::selectedPlaylist() const {
+    if (m_selectedPlaylistId == 0) return std::nullopt;
+    for (const auto &pl : m_playlists) {
+        if (pl.id == m_selectedPlaylistId) return pl;
+    }
+    return std::nullopt;
 }
 
 std::optional<TrackItem> MainWindow::selectedTrack() const {
@@ -895,6 +1080,215 @@ void MainWindow::removeSelectedAlbum() {
                 if (rc == 0) {
                     m_selectedAlbum.clear();
                     m_statusMsg = QString("%1 (%2)").arg(trText(m_lang, "lbl.album_removed")).arg(affected);
+                } else {
+                    m_statusMsg = errMsg;
+                }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::createPlaylist(const QVector<uint32_t> &initialTrackIds) {
+    if (!m_hasDevice || m_device.isReadOnly || m_busy) return;
+    const auto resOpt = runPlaylistEditorDialog(
+        this,
+        m_lang,
+        QString(),
+        initialTrackIds,
+        m_tracks,
+        true,
+        true
+    );
+    if (!resOpt.has_value()) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const PlaylistEditResult res = *resOpt;
+
+    std::thread([this, mp, res]() {
+        const QByteArray nameB = res.name.toUtf8();
+        uint64_t newId = 0;
+        char *err = nullptr;
+        const int32_t rc = poddrop_create_playlist(
+            mp.constData(),
+            nameB.constData(),
+            res.trackIds.isEmpty() ? nullptr : res.trackIds.constData(),
+            static_cast<size_t>(res.trackIds.size()),
+            &newId,
+            &err
+        );
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg, newId]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                if (rc == 0) {
+                    if (newId != 0) m_selectedPlaylistId = newId;
+                    m_statusMsg = trText(m_lang, "lbl.playlist_created");
+                } else {
+                    m_statusMsg = errMsg;
+                }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::editSelectedPlaylist() {
+    const auto plOpt = selectedPlaylist();
+    if (!plOpt.has_value()) return;
+    const bool canWrite = m_hasDevice && !m_device.isReadOnly && !m_busy && !plOpt->isSmart;
+
+    const auto resOpt = runPlaylistEditorDialog(
+        this,
+        m_lang,
+        plOpt->name,
+        plOpt->trackIds,
+        m_tracks,
+        false,
+        canWrite
+    );
+    if (!resOpt.has_value() || !canWrite) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const uint64_t plId = plOpt->id;
+    const PlaylistEditResult res = *resOpt;
+
+    std::thread([this, mp, plId, res]() {
+        const QByteArray nameB = res.name.toUtf8();
+        char *err = nullptr;
+        const int32_t rc = poddrop_update_playlist(
+            mp.constData(),
+            plId,
+            nameB.constData(),
+            res.trackIds.isEmpty() ? nullptr : res.trackIds.constData(),
+            static_cast<size_t>(res.trackIds.size()),
+            1,
+            &err
+        );
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                m_statusMsg = (rc == 0) ? trText(m_lang, "lbl.playlist_updated") : errMsg;
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::removeSelectedPlaylist() {
+    const auto plOpt = selectedPlaylist();
+    if (!plOpt.has_value() || !m_hasDevice || m_device.isReadOnly || m_busy) return;
+
+    const auto reply = QMessageBox::question(
+        this,
+        trText(m_lang, "act.remove_playlist"),
+        trText(m_lang, "dlg.remove_playlist_confirm").arg(plOpt->name)
+    );
+    if (reply != QMessageBox::Yes) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const uint64_t plId = plOpt->id;
+
+    std::thread([this, mp, plId]() {
+        char *err = nullptr;
+        const int32_t rc = poddrop_remove_playlist(mp.constData(), plId, &err);
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                if (rc == 0) {
+                    m_selectedPlaylistId = 0;
+                    m_statusMsg = trText(m_lang, "lbl.playlist_removed");
+                } else {
+                    m_statusMsg = errMsg;
+                }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::addTracksToPlaylistPrompt(const QVector<uint32_t> &trackIds) {
+    if (!m_hasDevice || m_device.isReadOnly || m_busy || trackIds.isEmpty()) return;
+    const auto pickOpt = runPickPlaylistDialog(this, m_lang, m_playlists);
+    if (!pickOpt.has_value()) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const PlaylistPickResult pick = *pickOpt;
+
+    std::thread([this, mp, pick, trackIds]() {
+        char *err = nullptr;
+        int32_t rc = 0;
+        uint32_t added = 0;
+        uint64_t targetId = pick.playlistId;
+
+        if (pick.createNew) {
+            const QByteArray nameB = pick.newName.toUtf8();
+            rc = poddrop_create_playlist(
+                mp.constData(),
+                nameB.constData(),
+                trackIds.constData(),
+                static_cast<size_t>(trackIds.size()),
+                &targetId,
+                &err
+            );
+            added = static_cast<uint32_t>(trackIds.size());
+        } else {
+            rc = poddrop_add_tracks_to_playlist(
+                mp.constData(),
+                targetId,
+                trackIds.constData(),
+                static_cast<size_t>(trackIds.size()),
+                &added,
+                &err
+            );
+        }
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, errMsg, added, pick, targetId]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                if (rc == 0) {
+                    if (targetId != 0) m_selectedPlaylistId = targetId;
+                    m_statusMsg = pick.createNew
+                        ? trText(m_lang, "lbl.playlist_created")
+                        : trText(m_lang, "lbl.playlist_tracks_added").arg(added);
                 } else {
                     m_statusMsg = errMsg;
                 }

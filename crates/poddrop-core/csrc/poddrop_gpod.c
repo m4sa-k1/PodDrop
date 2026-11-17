@@ -37,6 +37,14 @@ typedef struct {
     int32_t has_artwork;
 } PodDropGpodTrack;
 
+typedef struct {
+    uint64_t id;
+    char *name;
+    int32_t is_smart;
+    uint32_t *track_ids;
+    uint32_t track_count;
+} PodDropGpodPlaylist;
+
 static char *dup_cstr_or_empty(const char *s) {
     return g_strdup(s ? s : "");
 }
@@ -723,6 +731,317 @@ int poddrop_gpod_remove_album(
     if (out_affected_count) {
         *out_affected_count = affected;
     }
+    itdb_free(itdb);
+    return 0;
+}
+
+void poddrop_gpod_free_playlists(PodDropGpodPlaylist *playlists, uint32_t count) {
+    if (!playlists) return;
+    for (uint32_t i = 0; i < count; i++) {
+        g_free(playlists[i].name);
+        g_free(playlists[i].track_ids);
+    }
+    g_free(playlists);
+}
+
+int32_t poddrop_gpod_list_playlists(
+    const char *mount_path,
+    PodDropGpodPlaylist **out_playlists,
+    uint32_t *out_count,
+    char **out_err
+) {
+    if (!mount_path || !out_playlists || !out_count) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+    *out_playlists = NULL;
+    *out_count = 0;
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    guint total = 0;
+    for (GList *l = itdb->playlists; l != NULL; l = l->next) {
+        Itdb_Playlist *pl = (Itdb_Playlist *)l->data;
+        if (!pl) continue;
+        if (itdb_playlist_is_mpl(pl) || itdb_playlist_is_podcasts(pl) || itdb_playlist_is_audiobooks(pl)) {
+            continue;
+        }
+        total++;
+    }
+
+    if (total == 0) {
+        itdb_free(itdb);
+        return 0;
+    }
+
+    PodDropGpodPlaylist *arr = g_new0(PodDropGpodPlaylist, total);
+    uint32_t idx = 0;
+    for (GList *l = itdb->playlists; l != NULL; l = l->next) {
+        Itdb_Playlist *pl = (Itdb_Playlist *)l->data;
+        if (!pl) continue;
+        if (itdb_playlist_is_mpl(pl) || itdb_playlist_is_podcasts(pl) || itdb_playlist_is_audiobooks(pl)) {
+            continue;
+        }
+        arr[idx].id = (uint64_t)pl->id;
+        arr[idx].name = dup_cstr_or_empty(pl->name);
+        arr[idx].is_smart = pl->is_spl ? 1 : 0;
+
+        guint mcount = g_list_length(pl->members);
+        if (mcount > 0) {
+            arr[idx].track_ids = g_new0(uint32_t, mcount);
+            uint32_t tidx = 0;
+            for (GList *m = pl->members; m != NULL; m = m->next) {
+                Itdb_Track *tr = (Itdb_Track *)m->data;
+                if (tr) {
+                    arr[idx].track_ids[tidx++] = (uint32_t)tr->id;
+                }
+            }
+            arr[idx].track_count = tidx;
+        }
+        idx++;
+    }
+
+    *out_playlists = arr;
+    *out_count = idx;
+    itdb_free(itdb);
+    return 0;
+}
+
+int32_t poddrop_gpod_create_playlist(
+    const char *mount_path,
+    const char *name,
+    const uint32_t *track_ids,
+    uint32_t track_count,
+    uint64_t *out_playlist_id,
+    char **out_err
+) {
+    if (!mount_path || !name || name[0] == '\0') {
+        if (out_err) *out_err = g_strdup("Playlist name cannot be empty");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Playlist *pl = itdb_playlist_new(name, FALSE);
+    itdb_playlist_add(itdb, pl, -1);
+
+    if (track_ids && track_count > 0) {
+        for (uint32_t i = 0; i < track_count; i++) {
+            Itdb_Track *tr = itdb_track_by_id(itdb, track_ids[i]);
+            if (tr && !itdb_playlist_contains_track(pl, tr)) {
+                itdb_playlist_add_track(pl, tr, -1);
+            }
+        }
+    }
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (out_playlist_id) {
+        *out_playlist_id = (uint64_t)pl->id;
+    }
+    itdb_free(itdb);
+    return 0;
+}
+
+int32_t poddrop_gpod_update_playlist(
+    const char *mount_path,
+    uint64_t playlist_id,
+    const char *new_name,
+    const uint32_t *track_ids,
+    uint32_t track_count,
+    int32_t replace_tracks,
+    char **out_err
+) {
+    if (!mount_path) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Playlist *pl = itdb_playlist_by_id(itdb, (guint64)playlist_id);
+    if (!pl) {
+        if (out_err) *out_err = g_strdup("Playlist not found");
+        itdb_free(itdb);
+        return -1;
+    }
+    if (itdb_playlist_is_mpl(pl) || itdb_playlist_is_podcasts(pl) ||
+        itdb_playlist_is_audiobooks(pl) || pl->is_spl) {
+        if (out_err) *out_err = g_strdup("System or smart playlists cannot be edited");
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (new_name && new_name[0] != '\0') {
+        g_free(pl->name);
+        pl->name = g_strdup(new_name);
+    }
+
+    if (replace_tracks) {
+        while (pl->members != NULL) {
+            Itdb_Track *tr = (Itdb_Track *)pl->members->data;
+            itdb_playlist_remove_track(pl, tr);
+        }
+        if (track_ids && track_count > 0) {
+            for (uint32_t i = 0; i < track_count; i++) {
+                Itdb_Track *tr = itdb_track_by_id(itdb, track_ids[i]);
+                if (tr && !itdb_playlist_contains_track(pl, tr)) {
+                    itdb_playlist_add_track(pl, tr, -1);
+                }
+            }
+        }
+    }
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    itdb_free(itdb);
+    return 0;
+}
+
+int32_t poddrop_gpod_add_tracks_to_playlist(
+    const char *mount_path,
+    uint64_t playlist_id,
+    const uint32_t *track_ids,
+    uint32_t track_count,
+    uint32_t *out_added_count,
+    char **out_err
+) {
+    if (!mount_path) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Playlist *pl = itdb_playlist_by_id(itdb, (guint64)playlist_id);
+    if (!pl) {
+        if (out_err) *out_err = g_strdup("Playlist not found");
+        itdb_free(itdb);
+        return -1;
+    }
+    if (itdb_playlist_is_mpl(pl) || itdb_playlist_is_podcasts(pl) ||
+        itdb_playlist_is_audiobooks(pl) || pl->is_spl) {
+        if (out_err) *out_err = g_strdup("System or smart playlists cannot be edited");
+        itdb_free(itdb);
+        return -1;
+    }
+
+    uint32_t added = 0;
+    if (track_ids && track_count > 0) {
+        for (uint32_t i = 0; i < track_count; i++) {
+            Itdb_Track *tr = itdb_track_by_id(itdb, track_ids[i]);
+            if (tr && !itdb_playlist_contains_track(pl, tr)) {
+                itdb_playlist_add_track(pl, tr, -1);
+                added++;
+            }
+        }
+    }
+
+    if (added > 0 && !itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (out_added_count) {
+        *out_added_count = added;
+    }
+    itdb_free(itdb);
+    return 0;
+}
+
+int32_t poddrop_gpod_remove_playlist(
+    const char *mount_path,
+    uint64_t playlist_id,
+    char **out_err
+) {
+    if (!mount_path) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Playlist *pl = itdb_playlist_by_id(itdb, (guint64)playlist_id);
+    if (!pl) {
+        if (out_err) *out_err = g_strdup("Playlist not found");
+        itdb_free(itdb);
+        return -1;
+    }
+    if (itdb_playlist_is_mpl(pl) || itdb_playlist_is_podcasts(pl) || itdb_playlist_is_audiobooks(pl)) {
+        if (out_err) *out_err = g_strdup("System playlists cannot be removed");
+        itdb_free(itdb);
+        return -1;
+    }
+
+    itdb_playlist_remove(pl);
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
     itdb_free(itdb);
     return 0;
 }

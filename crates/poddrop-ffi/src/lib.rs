@@ -558,6 +558,231 @@ pub unsafe extern "C" fn poddrop_free_system_info(info: *mut PodDropSystemInfo) 
     i.backup_dir = ptr::null_mut();
 }
 
+#[repr(C)]
+pub struct PodDropPlaylist {
+    pub id: u64,
+    pub name: *mut c_char,
+    pub is_smart: i32,
+    pub track_ids: *mut u32,
+    pub track_count: usize,
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_list_playlists(
+    mount_path: *const c_char,
+    out_playlists: *mut *mut PodDropPlaylist,
+    out_count: *mut usize,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    if out_playlists.is_null() || out_count.is_null() {
+        set_err(out_err, "Null output pointer");
+        return -1;
+    }
+    unsafe {
+        *out_playlists = ptr::null_mut();
+        *out_count = 0;
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+
+    match LibgpodBackend::new().list_playlists(Path::new(&mp)) {
+        Ok(playlists) => {
+            let count = playlists.len();
+            let vec: Vec<PodDropPlaylist> = playlists
+                .into_iter()
+                .map(|p| {
+                    let track_count = p.track_ids.len();
+                    let track_ids = if track_count == 0 {
+                        ptr::null_mut()
+                    } else {
+                        let boxed = p.track_ids.into_boxed_slice();
+                        Box::into_raw(boxed) as *mut u32
+                    };
+                    PodDropPlaylist {
+                        id: p.id,
+                        name: to_c_char(&p.name),
+                        is_smart: i32::from(p.is_smart),
+                        track_ids,
+                        track_count,
+                    }
+                })
+                .collect();
+            let ptr = if vec.is_empty() {
+                ptr::null_mut()
+            } else {
+                let boxed = vec.into_boxed_slice();
+                Box::into_raw(boxed) as *mut PodDropPlaylist
+            };
+            unsafe {
+                *out_playlists = ptr;
+                *out_count = count;
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_free_playlists(playlists: *mut PodDropPlaylist, count: usize) {
+    if playlists.is_null() || count == 0 {
+        return;
+    }
+    let slice = unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(playlists, count)) };
+    for p in slice.iter() {
+        unsafe {
+            poddrop_free_string(p.name);
+        }
+        if !p.track_ids.is_null() && p.track_count > 0 {
+            drop(unsafe {
+                Box::from_raw(std::ptr::slice_from_raw_parts_mut(
+                    p.track_ids,
+                    p.track_count,
+                ))
+            });
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_create_playlist(
+    mount_path: *const c_char,
+    name: *const c_char,
+    track_ids: *const u32,
+    track_count: usize,
+    out_playlist_id: *mut u64,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let Some(pl_name) = (unsafe { cstr_to_opt(name) }) else {
+        set_err(out_err, "Playlist name cannot be empty");
+        return -1;
+    };
+    let ids: &[u32] = if track_ids.is_null() || track_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(track_ids, track_count) }
+    };
+
+    match LibgpodBackend::new().create_playlist(Path::new(&mp), &pl_name, ids) {
+        Ok(id) => {
+            if !out_playlist_id.is_null() {
+                unsafe { *out_playlist_id = id };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_update_playlist(
+    mount_path: *const c_char,
+    playlist_id: u64,
+    new_name: *const c_char,
+    track_ids: *const u32,
+    track_count: usize,
+    replace_tracks: i32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let name_opt = unsafe { cstr_to_opt(new_name) };
+    let ids_opt: Option<&[u32]> = if replace_tracks != 0 {
+        if track_ids.is_null() || track_count == 0 {
+            Some(&[])
+        } else {
+            Some(unsafe { std::slice::from_raw_parts(track_ids, track_count) })
+        }
+    } else {
+        None
+    };
+
+    match LibgpodBackend::new().update_playlist(
+        Path::new(&mp),
+        playlist_id,
+        name_opt.as_deref(),
+        ids_opt,
+    ) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_add_tracks_to_playlist(
+    mount_path: *const c_char,
+    playlist_id: u64,
+    track_ids: *const u32,
+    track_count: usize,
+    out_added_count: *mut u32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let ids: &[u32] = if track_ids.is_null() || track_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(track_ids, track_count) }
+    };
+
+    match LibgpodBackend::new().add_tracks_to_playlist(Path::new(&mp), playlist_id, ids) {
+        Ok(added) => {
+            if !out_added_count.is_null() {
+                unsafe { *out_added_count = added };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_remove_playlist(
+    mount_path: *const c_char,
+    playlist_id: u64,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+
+    match LibgpodBackend::new().remove_playlist(Path::new(&mp), playlist_id) {
+        Ok(()) => 0,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
 #[no_mangle]
 pub unsafe extern "C" fn poddrop_free_string(s: *mut c_char) {
     if !s.is_null() {

@@ -99,4 +99,29 @@ pub trait IpodBackend {
         -> Result<u32>;
     fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()>;
     fn get_track_artwork_png(&self, mount_path: &Path, track_id: u64) -> Result<Option<Vec<u8>>>;
+    fn list_playlists(&self, mount_path: &Path) -> Result<Vec<PlaylistInfo>>;
+    fn create_playlist(&self, mount_path: &Path, name: &str, track_ids: &[u32]) -> Result<u64>;
+    fn update_playlist(
+        &self,
+        mount_path: &Path,
+        playlist_id: u64,
+        new_name: Option<&str>,
+        track_ids: Option<&[u32]>,
+    ) -> Result<()>;
+    fn add_tracks_to_playlist(
+        &self,
+        mount_path: &Path,
+        playlist_id: u64,
+        track_ids: &[u32],
+    ) -> Result<u32>;
+    fn remove_playlist(&self, mount_path: &Path, playlist_id: u64) -> Result<()>;
+}
+
+/// Metadata for a user or smart playlist on the iPod.
+#[derive(Debug, Clone)]
+pub struct PlaylistInfo {
+    pub id: u64,
+    pub name: String,
+    pub is_smart: bool,
+    pub track_ids: Vec<u32>,
 }

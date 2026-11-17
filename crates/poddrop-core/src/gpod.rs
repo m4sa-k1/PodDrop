@@ -83,6 +83,15 @@ struct PodDropGpodUpdateAlbumRequest {
     apply_artwork_to_tracks: i32,
 }
 
+#[repr(C)]
+struct PodDropGpodPlaylist {
+    id: u64,
+    name: *mut c_char,
+    is_smart: i32,
+    track_ids: *mut u32,
+    track_count: u32,
+}
+
 extern "C" {
     fn poddrop_gpod_inspect(
         mount_path: *const c_char,
@@ -148,6 +157,43 @@ extern "C" {
         out_err: *mut *mut c_char,
     ) -> c_int;
     fn poddrop_gpod_free_bytes(data: *mut u8);
+    fn poddrop_gpod_list_playlists(
+        mount_path: *const c_char,
+        out_playlists: *mut *mut PodDropGpodPlaylist,
+        out_count: *mut u32,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_free_playlists(playlists: *mut PodDropGpodPlaylist, count: u32);
+    fn poddrop_gpod_create_playlist(
+        mount_path: *const c_char,
+        name: *const c_char,
+        track_ids: *const u32,
+        track_count: u32,
+        out_playlist_id: *mut u64,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_update_playlist(
+        mount_path: *const c_char,
+        playlist_id: u64,
+        new_name: *const c_char,
+        track_ids: *const u32,
+        track_count: u32,
+        replace_tracks: i32,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_add_tracks_to_playlist(
+        mount_path: *const c_char,
+        playlist_id: u64,
+        track_ids: *const u32,
+        track_count: u32,
+        out_added_count: *mut u32,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_remove_playlist(
+        mount_path: *const c_char,
+        playlist_id: u64,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
 }
 
 /// Reads `SysInfoExtended` plist XML directly from an iPod block device via SCSI VPD (read-only).
@@ -569,6 +615,170 @@ impl IpodBackend for LibgpodBackend {
         let bytes = unsafe { std::slice::from_raw_parts(data_ptr, data_len) }.to_vec();
         unsafe { poddrop_gpod_free_bytes(data_ptr) };
         Ok(Some(bytes))
+    }
+
+    fn list_playlists(&self, mount_path: &Path) -> Result<Vec<crate::backend::PlaylistInfo>> {
+        validate_mount_path(mount_path)?;
+        let c_mount = path_to_cstring(mount_path)?;
+        let mut pl_ptr: *mut PodDropGpodPlaylist = ptr::null_mut();
+        let mut count: u32 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+
+        let rc = unsafe {
+            poddrop_gpod_list_playlists(c_mount.as_ptr(), &mut pl_ptr, &mut count, &mut err_ptr)
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+
+        let mut playlists = Vec::with_capacity(count as usize);
+        if !pl_ptr.is_null() && count > 0 {
+            let slice = unsafe { std::slice::from_raw_parts(pl_ptr, count as usize) };
+            for p in slice {
+                let track_ids = if !p.track_ids.is_null() && p.track_count > 0 {
+                    unsafe { std::slice::from_raw_parts(p.track_ids, p.track_count as usize) }
+                        .to_vec()
+                } else {
+                    Vec::new()
+                };
+                playlists.push(crate::backend::PlaylistInfo {
+                    id: p.id,
+                    name: unsafe { cstr_to_string(p.name) },
+                    is_smart: p.is_smart != 0,
+                    track_ids,
+                });
+            }
+            unsafe { poddrop_gpod_free_playlists(pl_ptr, count) };
+        }
+        Ok(playlists)
+    }
+
+    fn create_playlist(&self, mount_path: &Path, name: &str, track_ids: &[u32]) -> Result<u64> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_name = str_to_cstring(name)?;
+        let mut pl_id: u64 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            poddrop_gpod_create_playlist(
+                c_mount.as_ptr(),
+                c_name.as_ptr(),
+                if track_ids.is_empty() {
+                    ptr::null()
+                } else {
+                    track_ids.as_ptr()
+                },
+                track_ids.len() as u32,
+                &mut pl_id,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(pl_id)
+    }
+
+    fn update_playlist(
+        &self,
+        mount_path: &Path,
+        playlist_id: u64,
+        new_name: Option<&str>,
+        track_ids: Option<&[u32]>,
+    ) -> Result<()> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_name = new_name.map(str_to_cstring).transpose()?;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let (t_ptr, t_len, replace_tracks) = match track_ids {
+            Some(ids) => (
+                if ids.is_empty() {
+                    ptr::null()
+                } else {
+                    ids.as_ptr()
+                },
+                ids.len() as u32,
+                1,
+            ),
+            None => (ptr::null(), 0, 0),
+        };
+        let rc = unsafe {
+            poddrop_gpod_update_playlist(
+                c_mount.as_ptr(),
+                playlist_id,
+                c_name.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+                t_ptr,
+                t_len,
+                replace_tracks,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(())
+    }
+
+    fn add_tracks_to_playlist(
+        &self,
+        mount_path: &Path,
+        playlist_id: u64,
+        track_ids: &[u32],
+    ) -> Result<u32> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+        let c_mount = path_to_cstring(mount_path)?;
+        let mut added: u32 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            poddrop_gpod_add_tracks_to_playlist(
+                c_mount.as_ptr(),
+                playlist_id,
+                if track_ids.is_empty() {
+                    ptr::null()
+                } else {
+                    track_ids.as_ptr()
+                },
+                track_ids.len() as u32,
+                &mut added,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(added)
+    }
+
+    fn remove_playlist(&self, mount_path: &Path, playlist_id: u64) -> Result<()> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+        let c_mount = path_to_cstring(mount_path)?;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc =
+            unsafe { poddrop_gpod_remove_playlist(c_mount.as_ptr(), playlist_id, &mut err_ptr) };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(())
     }
 }
 

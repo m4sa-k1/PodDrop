@@ -1,6 +1,7 @@
 #include "dialogs.hpp"
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -8,9 +9,11 @@
 #include <QIntValidator>
 #include <QLabel>
 #include <QLineEdit>
+#include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
 #include <QVBoxLayout>
+#include <unordered_map>
 
 #include "poddrop.h"
 
@@ -513,4 +516,253 @@ std::optional<bool> runRemoveAlbumDialog(
         return std::nullopt;
     }
     return rbWithTracks->isChecked();
+}
+
+namespace {
+
+QString formatTrackSummary(const TrackItem &t) {
+    QString artist = t.artist.isEmpty() ? QStringLiteral("-") : t.artist;
+    QString album = t.album.isEmpty() ? QStringLiteral("-") : t.album;
+    return QString("%1 — %2 [%3]").arg(t.title, artist, album);
+}
+
+} // namespace
+
+std::optional<PlaylistEditResult> runPlaylistEditorDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QString &initialName,
+    const QVector<uint32_t> &initialTrackIds,
+    const QVector<TrackItem> &allTracks,
+    bool isNew,
+    bool canWrite
+) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(trText(lang, isNew ? "act.new_playlist" : "act.edit_playlist"));
+    dlg.resize(780, 480);
+
+    std::unordered_map<uint32_t, const TrackItem *> trackById;
+    trackById.reserve(static_cast<size_t>(allTracks.size()));
+    for (const auto &t : allTracks) {
+        trackById[static_cast<uint32_t>(t.id)] = &t;
+    }
+
+    auto *nameEdit = new QLineEdit(initialName, &dlg);
+    nameEdit->setReadOnly(!canWrite);
+    auto *nameRow = new QHBoxLayout();
+    nameRow->addWidget(new QLabel(trText(lang, "dlg.playlist_name"), &dlg));
+    nameRow->addWidget(nameEdit, 1);
+
+    // Left: Available tracks
+    auto *availLbl = new QLabel(trText(lang, "dlg.playlist_available"), &dlg);
+    auto *filterEdit = new QLineEdit(&dlg);
+    filterEdit->setPlaceholderText(trText(lang, "lbl.search_hint"));
+    filterEdit->setClearButtonEnabled(true);
+    auto *availList = new QListWidget(&dlg);
+    availList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    // Right: Playlist members
+    auto *memberLbl = new QLabel(trText(lang, "dlg.playlist_members"), &dlg);
+    auto *memberList = new QListWidget(&dlg);
+    memberList->setSelectionMode(QAbstractItemView::ExtendedSelection);
+
+    for (uint32_t tid : initialTrackIds) {
+        auto it = trackById.find(tid);
+        if (it == trackById.end()) continue;
+        auto *item = new QListWidgetItem(formatTrackSummary(*it->second), memberList);
+        item->setData(Qt::UserRole, static_cast<qulonglong>(tid));
+    }
+
+    auto rebuildAvail = [&]() {
+        availList->clear();
+        const QString q = filterEdit->text().trimmed().toLower();
+        for (const auto &t : allTracks) {
+            if (!q.isEmpty()) {
+                const bool match = t.title.toLower().contains(q) ||
+                                   t.artist.toLower().contains(q) ||
+                                   t.album.toLower().contains(q);
+                if (!match) continue;
+            }
+            auto *item = new QListWidgetItem(formatTrackSummary(t), availList);
+            item->setData(Qt::UserRole, static_cast<qulonglong>(t.id));
+        }
+    };
+    rebuildAvail();
+
+    auto *addBtn = new QPushButton(trText(lang, "dlg.playlist_add"), &dlg);
+    auto *removeBtn = new QPushButton(trText(lang, "dlg.playlist_remove"), &dlg);
+    auto *upBtn = new QPushButton(trText(lang, "dlg.playlist_up"), &dlg);
+    auto *downBtn = new QPushButton(trText(lang, "dlg.playlist_down"), &dlg);
+    addBtn->setEnabled(canWrite);
+    removeBtn->setEnabled(canWrite);
+    upBtn->setEnabled(canWrite);
+    downBtn->setEnabled(canWrite);
+
+    auto addSelectedTracks = [&]() {
+        if (!canWrite) return;
+        for (QListWidgetItem *sel : availList->selectedItems()) {
+            const uint32_t tid = static_cast<uint32_t>(sel->data(Qt::UserRole).toULongLong());
+            bool exists = false;
+            for (int i = 0; i < memberList->count(); i++) {
+                if (static_cast<uint32_t>(memberList->item(i)->data(Qt::UserRole).toULongLong()) == tid) {
+                    exists = true;
+                    break;
+                }
+            }
+            if (!exists) {
+                if (auto it = trackById.find(tid); it != trackById.end()) {
+                    auto *item = new QListWidgetItem(formatTrackSummary(*it->second), memberList);
+                    item->setData(Qt::UserRole, static_cast<qulonglong>(tid));
+                }
+            }
+        }
+    };
+
+    QObject::connect(filterEdit, &QLineEdit::textChanged, &dlg, rebuildAvail);
+    QObject::connect(addBtn, &QPushButton::clicked, &dlg, addSelectedTracks);
+    QObject::connect(availList, &QListWidget::itemDoubleClicked, &dlg, [&](QListWidgetItem *) {
+        addSelectedTracks();
+    });
+
+    QObject::connect(removeBtn, &QPushButton::clicked, &dlg, [&]() {
+        if (!canWrite) return;
+        const auto selected = memberList->selectedItems();
+        for (QListWidgetItem *item : selected) {
+            delete memberList->takeItem(memberList->row(item));
+        }
+    });
+
+    QObject::connect(upBtn, &QPushButton::clicked, &dlg, [&]() {
+        if (!canWrite) return;
+        const int row = memberList->currentRow();
+        if (row <= 0) return;
+        QListWidgetItem *item = memberList->takeItem(row);
+        memberList->insertItem(row - 1, item);
+        memberList->setCurrentRow(row - 1);
+    });
+
+    QObject::connect(downBtn, &QPushButton::clicked, &dlg, [&]() {
+        if (!canWrite) return;
+        const int row = memberList->currentRow();
+        if (row < 0 || row >= memberList->count() - 1) return;
+        QListWidgetItem *item = memberList->takeItem(row);
+        memberList->insertItem(row + 1, item);
+        memberList->setCurrentRow(row + 1);
+    });
+
+    auto *leftCol = new QVBoxLayout();
+    leftCol->addWidget(availLbl);
+    leftCol->addWidget(filterEdit);
+    leftCol->addWidget(availList, 1);
+
+    auto *midCol = new QVBoxLayout();
+    midCol->addStretch(1);
+    midCol->addWidget(addBtn);
+    midCol->addWidget(removeBtn);
+    midCol->addSpacing(12);
+    midCol->addWidget(upBtn);
+    midCol->addWidget(downBtn);
+    midCol->addStretch(1);
+
+    auto *rightCol = new QVBoxLayout();
+    rightCol->addWidget(memberLbl);
+    rightCol->addWidget(memberList, 1);
+
+    auto *body = new QHBoxLayout();
+    body->addLayout(leftCol, 1);
+    body->addLayout(midCol);
+    body->addLayout(rightCol, 1);
+
+    auto *buttons = new QDialogButtonBox(
+        canWrite ? (QDialogButtonBox::Ok | QDialogButtonBox::Cancel) : QDialogButtonBox::Close,
+        &dlg
+    );
+    auto *okBtn = buttons->button(QDialogButtonBox::Ok);
+    if (okBtn) {
+        okBtn->setEnabled(!nameEdit->text().trimmed().isEmpty());
+        QObject::connect(nameEdit, &QLineEdit::textChanged, &dlg, [&](const QString &txt) {
+            okBtn->setEnabled(!txt.trimmed().isEmpty());
+        });
+    }
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addLayout(nameRow);
+    root->addLayout(body, 1);
+    root->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted || !canWrite) {
+        return std::nullopt;
+    }
+
+    QVector<uint32_t> resultIds;
+    resultIds.reserve(memberList->count());
+    for (int i = 0; i < memberList->count(); i++) {
+        resultIds.push_back(static_cast<uint32_t>(memberList->item(i)->data(Qt::UserRole).toULongLong()));
+    }
+
+    return PlaylistEditResult{
+        nameEdit->text().trimmed(),
+        resultIds,
+    };
+}
+
+std::optional<PlaylistPickResult> runPickPlaylistDialog(
+    QWidget *parent,
+    UiLang lang,
+    const QVector<PlaylistItem> &playlists
+) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(trText(lang, "act.add_to_playlist"));
+    dlg.setMinimumWidth(380);
+
+    auto *msgLbl = new QLabel(trText(lang, "dlg.playlist_pick_msg"), &dlg);
+    msgLbl->setWordWrap(true);
+
+    auto *combo = new QComboBox(&dlg);
+    for (const auto &pl : playlists) {
+        if (pl.isSmart) continue;
+        combo->addItem(
+            QString("%1 (%2)").arg(pl.name).arg(pl.trackIds.size()),
+            static_cast<qulonglong>(pl.id)
+        );
+    }
+    combo->addItem(trText(lang, "dlg.playlist_new_option"), static_cast<qulonglong>(0));
+
+    auto *newNameEdit = new QLineEdit(&dlg);
+    newNameEdit->setPlaceholderText(trText(lang, "dlg.playlist_name"));
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dlg);
+    auto *okBtn = buttons->button(QDialogButtonBox::Ok);
+
+    auto updateNewRow = [&]() {
+        const bool isNew = (combo->currentData().toULongLong() == 0);
+        newNameEdit->setVisible(isNew);
+        if (okBtn) {
+            okBtn->setEnabled(!isNew || !newNameEdit->text().trimmed().isEmpty());
+        }
+    };
+    updateNewRow();
+
+    QObject::connect(combo, &QComboBox::currentIndexChanged, &dlg, updateNewRow);
+    QObject::connect(newNameEdit, &QLineEdit::textChanged, &dlg, updateNewRow);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addWidget(msgLbl);
+    root->addWidget(combo);
+    root->addWidget(newNameEdit);
+    root->addWidget(buttons);
+
+    if (dlg.exec() != QDialog::Accepted) {
+        return std::nullopt;
+    }
+
+    const uint64_t chosenId = combo->currentData().toULongLong();
+    if (chosenId == 0) {
+        return PlaylistPickResult{true, 0, newNameEdit->text().trimmed()};
+    }
+    return PlaylistPickResult{false, chosenId, QString()};
 }
