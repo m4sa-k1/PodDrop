@@ -4,6 +4,7 @@ project(poddrop-gui VERSION 0.1.0 LANGUAGES CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
+set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets)
 find_package(PkgConfig REQUIRED)
@@ -29,6 +30,7 @@ add_executable(poddrop-gui
     src/main.cpp
     src/mainwindow.cpp
     src/dialogs.cpp
+    resources/resources.qrc
 )
 
 add_dependencies(poddrop-gui poddrop_ffi_build)

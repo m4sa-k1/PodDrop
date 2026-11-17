@@ -36,3 +36,4 @@ ArtworkDB*
 *.jpg
 *.jpeg
 *.png
+!qt-gui/resources/poddrop.png
