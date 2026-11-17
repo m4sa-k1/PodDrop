@@ -1,17 +1,18 @@
 mod dialogs;
 mod window;
 
-use adw::prelude::*;
 use gtk4::gdk;
-use libadwaita as adw;
+use gtk4::prelude::*;
 
 const APP_ID: &str = "io.github.m4sa_k1.PodDrop";
 const APP_CSS: &str = include_str!("style.css");
 
 fn main() -> gtk4::glib::ExitCode {
-    let app = adw::Application::builder().application_id(APP_ID).build();
+    let app = gtk4::Application::builder().application_id(APP_ID).build();
     app.connect_startup(|_| {
-        adw::StyleManager::default().set_color_scheme(adw::ColorScheme::ForceDark);
+        if let Some(settings) = gtk4::Settings::default() {
+            settings.set_gtk_application_prefer_dark_theme(true);
+        }
         if let Some(display) = gdk::Display::default() {
             let provider = gtk4::CssProvider::new();
             provider.load_from_data(APP_CSS);

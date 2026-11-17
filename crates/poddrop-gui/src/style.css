@@ -1,198 +1,143 @@
-/* Clean monochrome (black & white) theme overriding external gtk-4.0 user themes */
+/* Classic monochrome (black & white) desktop utility style */
 
 window,
-window.csd,
 .background {
-    background-color: #111111;
+    background-color: #121212;
     background-image: none;
-    color: #f2f2f2;
+    color: #f0f0f0;
     box-shadow: none;
 }
 
-headerbar,
-headerbar:backdrop {
-    background-color: #161616;
-    background-image: none;
-    color: #f2f2f2;
-    border: none;
-    border-bottom: 1px solid #282828;
-    box-shadow: none;
-    min-height: 46px;
+.toolbar-bar {
+    background-color: #1a1a1a;
+    border-bottom: 1px solid #383838;
+    padding: 6px 8px;
+}
+
+.status-bar {
+    background-color: #1a1a1a;
+    border-top: 1px solid #383838;
     padding: 4px 10px;
-}
-
-headerbar button,
-headerbar button:not(.suggested-action):not(.destructive-action) {
-    background-color: #232323;
-    background-image: none;
-    color: #f2f2f2;
-    border: none;
-    border-radius: 6px;
-    box-shadow: none;
-    outline: none;
-    margin: 0;
-    padding: 6px 12px;
-    min-height: 30px;
-}
-
-headerbar button:hover,
-headerbar button:not(.suggested-action):not(.destructive-action):hover {
-    background-color: #323232;
-    border: none;
-    box-shadow: none;
-}
-
-headerbar button:active,
-headerbar button:checked {
-    background-color: #3c3c3c;
-    color: #ffffff;
-}
-
-headerbar button.primary-btn {
-    background-color: #f2f2f2;
-    color: #111111;
-    border: none;
-    font-weight: 600;
-}
-
-headerbar button.primary-btn:hover {
-    background-color: #d8d8d8;
-}
-
-headerbar button.primary-btn:disabled {
-    background-color: #2a2a2a;
-    color: #666666;
-}
-
-headerbar windowcontrols > button,
-headerbar windowcontrols > button:not(.suggested-action):not(.destructive-action) {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    border-radius: 6px;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 4px;
-    margin: 0 2px;
-}
-
-headerbar windowcontrols > button:hover,
-headerbar windowcontrols > button:not(.suggested-action):not(.destructive-action):hover {
-    background-color: #2c2c2c;
-}
-
-viewswitcher button,
-viewswitcher button:not(.suggested-action):not(.destructive-action) {
-    background-color: transparent;
-    background-image: none;
-    border: none;
-    box-shadow: none;
-    color: #9e9e9e;
-    border-radius: 6px;
-    padding: 6px 14px;
-    margin: 0 2px;
-}
-
-viewswitcher button:hover,
-viewswitcher button:not(.suggested-action):not(.destructive-action):hover {
-    background-color: #242424;
-    color: #f2f2f2;
-}
-
-viewswitcher button:checked,
-viewswitcher button:checked:not(.suggested-action):not(.destructive-action) {
-    background-color: #2c2c2c;
-    color: #ffffff;
-}
-
-.card-box {
-    background-color: #181818;
-    border: 1px solid #2b2b2b;
-    border-radius: 10px;
-}
-
-.drop-zone {
-    background-color: #141414;
-    border: 1px dashed #3a3a3a;
-    border-radius: 10px;
-}
-
-.stat-value {
-    font-size: 24px;
-    font-weight: 700;
-    color: #ffffff;
-}
-
-.stat-label {
     font-size: 12px;
-    color: #9e9e9e;
+    color: #b8b8b8;
 }
 
-.muted-text {
-    color: #9e9e9e;
+.ro-bar {
+    background-color: #262626;
+    border-bottom: 1px solid #444444;
+    padding: 5px 10px;
+    font-size: 12px;
+    color: #ffffff;
+}
+
+.panel-box {
+    background-color: #161616;
+    border: 1px solid #363636;
+    border-radius: 2px;
+}
+
+.panel-header {
+    background-color: #202020;
+    border-bottom: 1px solid #363636;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #e8e8e8;
+}
+
+.table-header {
+    background-color: #202020;
+    border-bottom: 1px solid #3a3a3a;
+    padding: 5px 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #dcdcdc;
+}
+
+.muted {
+    color: #9a9a9a;
 }
 
 button {
     background-color: #242424;
     background-image: none;
-    color: #f2f2f2;
-    border: 1px solid #363636;
-    border-radius: 7px;
+    color: #f0f0f0;
+    border: 1px solid #444444;
+    border-radius: 2px;
     box-shadow: none;
     outline: none;
-    padding: 6px 12px;
+    padding: 4px 10px;
+    min-height: 24px;
+    font-size: 13px;
 }
 
 button:hover {
-    background-color: #303030;
-    border-color: #4a4a4a;
+    background-color: #323232;
+    border-color: #666666;
+}
+
+button:active {
+    background-color: #3d3d3d;
 }
 
 button:disabled {
-    background-color: #191919;
-    color: #666666;
-    border-color: #262626;
+    background-color: #1a1a1a;
+    color: #606060;
+    border-color: #2d2d2d;
 }
 
 button.primary-btn {
-    background-color: #f2f2f2;
+    background-color: #f0f0f0;
     color: #111111;
-    border: 1px solid #f2f2f2;
+    border: 1px solid #f0f0f0;
     font-weight: 600;
 }
 
 button.primary-btn:hover {
-    background-color: #dcdcdc;
+    background-color: #d6d6d6;
 }
 
 button.primary-btn:disabled {
-    background-color: #2a2a2a;
-    color: #666666;
-    border-color: #2a2a2a;
+    background-color: #282828;
+    color: #606060;
+    border-color: #343434;
 }
 
-button.flat {
-    background-color: transparent;
-    border-color: transparent;
+entry,
+searchentry {
+    background-color: #101010;
+    background-image: none;
+    color: #f0f0f0;
+    border: 1px solid #444444;
+    border-radius: 2px;
+    box-shadow: none;
+    min-height: 26px;
+    padding: 2px 6px;
 }
 
-button.flat:hover {
-    background-color: #2a2a2a;
+entry:focus-within,
+searchentry:focus-within {
+    border-color: #cccccc;
 }
 
-/* DropDown & Popover menus */
+entry:disabled {
+    background-color: #181818;
+    color: #888888;
+}
+
 dropdown > button {
     background-color: #242424;
     background-image: none;
-    color: #f2f2f2;
-    border: 1px solid #363636;
-    border-radius: 7px;
+    color: #f0f0f0;
+    border: 1px solid #444444;
+    border-radius: 2px;
     box-shadow: none;
+    padding: 4px 8px;
+    min-height: 24px;
 }
 
 dropdown > button:hover {
-    background-color: #303030;
+    background-color: #323232;
 }
 
 popover,
@@ -207,116 +152,89 @@ popover > arrow,
 popover > contents,
 popover.background > arrow,
 popover.background > contents,
-popover.menu > arrow,
 popover.menu > contents {
-    background-color: #1b1b1b;
+    background-color: #1c1c1c;
     background-image: none;
-    color: #f2f2f2;
-    border: 1px solid #3a3a3a;
-    border-radius: 8px;
-    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.7);
-    padding: 4px;
+    color: #f0f0f0;
+    border: 1px solid #4a4a4a;
+    border-radius: 2px;
+    box-shadow: none;
+    padding: 2px;
 }
 
 popover scrolledwindow,
 popover listview,
 popover list {
-    background-color: #1b1b1b;
+    background-color: #1c1c1c;
     background-image: none;
-    color: #f2f2f2;
+    color: #f0f0f0;
 }
 
 popover listview > row,
-popover list > row,
-popover modelbutton {
+popover list > row {
     background-color: transparent;
     background-image: none;
-    color: #f2f2f2;
-    border-radius: 6px;
-    padding: 6px 10px;
+    color: #f0f0f0;
+    border-radius: 0px;
+    padding: 5px 8px;
 }
 
 popover listview > row:hover,
 popover listview > row:selected,
-popover list > row:hover,
-popover modelbutton:hover {
-    background-color: #303030;
-    color: #ffffff;
+popover list > row:hover {
+    background-color: #ffffff;
+    color: #111111;
 }
 
-/* Inputs, EntryRow & Lists */
-entry,
-searchentry {
-    background-color: #181818;
+list.classic-list {
+    background-color: #121212;
     background-image: none;
-    color: #f2f2f2;
-    border: 1px solid #343434;
-    border-radius: 7px;
-    box-shadow: none;
+    color: #f0f0f0;
 }
 
-entry:focus-within,
-searchentry:focus-within {
-    border-color: #888888;
-}
-
-row.entry {
-    background-color: #181818;
+list.classic-list > row {
+    background-color: #141414;
     background-image: none;
-    color: #f2f2f2;
-}
-
-row.entry text {
-    color: #f2f2f2;
-}
-
-list.boxed-list {
-    background-color: #181818;
-    background-image: none;
-    border: 1px solid #2b2b2b;
-    border-radius: 10px;
-}
-
-list.boxed-list > row {
-    background-color: transparent;
-    background-image: none;
-    color: #f2f2f2;
+    color: #f0f0f0;
     border-bottom: 1px solid #242424;
+    padding: 4px 8px;
 }
 
-list.boxed-list > row:hover {
-    background-color: #202020;
+list.classic-list > row:hover {
+    background-color: #222222;
 }
 
-list.boxed-list > row:last-child {
-    border-bottom: none;
+list.classic-list > row:selected {
+    background-color: #f0f0f0;
+    color: #111111;
+}
+
+list.classic-list > row:selected label {
+    color: #111111;
 }
 
 progressbar trough {
-    background-color: #262626;
+    background-color: #242424;
     background-image: none;
-    border-radius: 4px;
-    min-height: 6px;
+    border: 1px solid #3a3a3a;
+    border-radius: 1px;
+    min-height: 8px;
 }
 
 progressbar progress {
-    background-color: #e6e6e6;
+    background-color: #e8e8e8;
     background-image: none;
-    border-radius: 4px;
-    min-height: 6px;
+    border-radius: 0px;
+    min-height: 8px;
 }
 
-/* Remove overscroll / undershoot artifacts completely */
+paned > separator {
+    background-color: #363636;
+    min-width: 2px;
+}
+
 scrolledwindow,
 scrolledwindow > viewport,
-scrolledwindow > undershoot.top,
-scrolledwindow > undershoot.bottom,
-scrolledwindow > undershoot.left,
-scrolledwindow > undershoot.right,
-scrolledwindow > overshoot.top,
-scrolledwindow > overshoot.bottom,
-scrolledwindow > overshoot.left,
-scrolledwindow > overshoot.right,
 undershoot,
 overshoot {
     background: none;
@@ -326,25 +244,17 @@ overshoot {
 }
 
 scrollbar {
-    background-color: transparent;
-    border: none;
+    background-color: #181818;
+    border-left: 1px solid #2b2b2b;
 }
 
 scrollbar slider {
-    background-color: #3a3a3a;
-    border-radius: 4px;
-    min-width: 6px;
-    min-height: 6px;
+    background-color: #464646;
+    border-radius: 0px;
+    min-width: 8px;
+    min-height: 8px;
 }
 
 scrollbar slider:hover {
-    background-color: #555555;
-}
-
-banner,
-banner > revealer > box {
-    background-color: #1e1e1e;
-    background-image: none;
-    color: #e6e6e6;
-    border-bottom: 1px solid #333333;
+    background-color: #686868;
 }

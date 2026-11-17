@@ -24,10 +24,10 @@ We follow a strict, milestone-driven workflow. Each phase must be verified befor
 - [ ] **Hardware Verification**: Transfer test track with album art to real iPod Nano 4G and verify playback + artwork display on device
 
 ## Phase 3: Lightweight GTK4 GUI (`v0.1.0-beta.1`) — Implemented
-- [x] GTK4 + libadwaita main window, auto-mount detection, device info card, track list
+- [x] Classic 2-pane GTK4 main window (toolbar, device/album sidebar, track table, status bar)
 - [x] Read-only mount safety banner and write-lock guard
-- [x] Drag & drop / file-picker music transfer and optional artwork assignment
-- [x] Live language switcher (`en` / `ja`) and async progress/toast notifications
+- [x] Drag & drop / file-picker transfer, album creation dialog, and track metadata editor
+- [x] Live language switcher (`en` / `ja`) and async status updates
 
 ## Phase 4: Release Preparation (`v0.1.0`)
 - [ ] Packaging (`PKGBUILD` / `.desktop` / AppStream metadata)

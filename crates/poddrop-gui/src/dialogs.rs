@@ -2,96 +2,95 @@ use std::cell::RefCell;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use adw::prelude::*;
 use gtk4::gio;
-use libadwaita as adw;
+use gtk4::prelude::*;
 
 use poddrop_core::backend::{TrackMetadata, UpdateTrackRequest};
 use poddrop_core::i18n::Translator;
 
-/// Callback invoked when the user confirms creating an album and transferring tracks.
 pub type CreateAlbumCallback = Rc<dyn Fn(String, String, Option<PathBuf>, Vec<PathBuf>)>;
-
-/// Callback invoked when the user saves edited track metadata.
 pub type UpdateTrackCallback = Rc<dyn Fn(u64, UpdateTrackRequest)>;
+pub type ConfirmCallback = Rc<dyn Fn()>;
 
-/// Opens an intuitive modal dialog to create/populate an album with optional cover art and audio files.
+/// Classic two-column Windows-style modal dialog to create/populate an album.
 pub fn show_create_album_dialog(
-    parent: &adw::ApplicationWindow,
+    parent: &gtk4::ApplicationWindow,
     tr: &Translator,
     initial_album: Option<&str>,
     initial_artist: Option<&str>,
     on_submit: CreateAlbumCallback,
 ) {
-    let win = adw::Window::builder()
+    let win = gtk4::Window::builder()
         .title(tr.t("gui.create_album"))
         .transient_for(parent)
         .modal(true)
-        .default_width(460)
+        .default_width(440)
         .resizable(false)
         .build();
 
-    let header = adw::HeaderBar::new();
-    header.set_show_start_title_buttons(false);
-    header.set_show_end_title_buttons(false);
-    let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
-    let submit_btn = gtk4::Button::with_label(tr.t("gui.select_files"));
-    submit_btn.add_css_class("primary-btn");
-    header.pack_start(&cancel_btn);
-    header.pack_end(&submit_btn);
-
-    let album_entry = adw::EntryRow::builder()
-        .title(tr.t("gui.album_name"))
+    let grid = gtk4::Grid::builder()
+        .row_spacing(8)
+        .column_spacing(12)
         .build();
+
+    let album_entry = gtk4::Entry::builder().hexpand(true).build();
     if let Some(a) = initial_album {
         album_entry.set_text(a);
     }
-    let artist_entry = adw::EntryRow::builder()
-        .title(tr.t("gui.artist_name"))
-        .build();
+    let artist_entry = gtk4::Entry::builder().hexpand(true).build();
     if let Some(ar) = initial_artist {
         artist_entry.set_text(ar);
     }
 
-    let form_group = adw::PreferencesGroup::new();
-    form_group.add(&album_entry);
-    form_group.add(&artist_entry);
-
     let cover_path: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
-    let cover_label = gtk4::Label::builder()
-        .xalign(0.0)
-        .ellipsize(gtk4::pango::EllipsizeMode::Middle)
-        .label(tr.t("gui.cover_image"))
+    let cover_entry = gtk4::Entry::builder()
         .hexpand(true)
-        .css_classes(["dim-label"])
+        .editable(false)
+        .placeholder_text("-")
         .build();
     let cover_btn = gtk4::Button::with_label(tr.t("gui.select_cover"));
     let clear_btn = gtk4::Button::with_label(tr.t("gui.clear"));
 
     let cover_row = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Horizontal)
-        .spacing(8)
+        .spacing(6)
         .build();
+    cover_row.append(&cover_entry);
     cover_row.append(&cover_btn);
     cover_row.append(&clear_btn);
 
-    let content = gtk4::Box::builder()
+    grid.attach(&make_field_label(tr.t("gui.album_name")), 0, 0, 1, 1);
+    grid.attach(&album_entry, 1, 0, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.artist_name")), 0, 1, 1, 1);
+    grid.attach(&artist_entry, 1, 1, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.cover_image")), 0, 2, 1, 1);
+    grid.attach(&cover_row, 1, 2, 1, 1);
+
+    let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
+    let submit_btn = gtk4::Button::with_label(tr.t("gui.select_files"));
+    submit_btn.add_css_class("primary-btn");
+
+    let btn_row = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Horizontal)
+        .spacing(8)
+        .halign(gtk4::Align::End)
+        .margin_top(6)
+        .build();
+    btn_row.append(&submit_btn);
+    btn_row.append(&cancel_btn);
+
+    let root = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
         .spacing(12)
-        .margin_top(16)
-        .margin_bottom(16)
-        .margin_start(16)
-        .margin_end(16)
+        .margin_top(14)
+        .margin_bottom(14)
+        .margin_start(14)
+        .margin_end(14)
         .build();
-    content.append(&form_group);
-    content.append(&cover_row);
-    content.append(&cover_label);
-
-    let toolbar = adw::ToolbarView::new();
-    toolbar.set_top_bar_style(adw::ToolbarStyle::Raised);
-    toolbar.add_top_bar(&header);
-    toolbar.set_content(Some(&content));
-    win.set_content(Some(&toolbar));
+    root.append(&grid);
+    root.append(&gtk4::Separator::new(gtk4::Orientation::Horizontal));
+    root.append(&btn_row);
+    win.set_child(Some(&root));
 
     {
         let win_c = win.clone();
@@ -101,7 +100,7 @@ pub fn show_create_album_dialog(
     {
         let win_c = win.clone();
         let cover_c = cover_path.clone();
-        let lbl_c = cover_label.clone();
+        let entry_c = cover_entry.clone();
         let dlg_title = tr.t("gui.select_cover").to_string();
         cover_btn.connect_clicked(move |_| {
             let filter = gtk4::FileFilter::new();
@@ -117,11 +116,11 @@ pub fn show_create_album_dialog(
                 .modal(true)
                 .build();
             let cover_cb = cover_c.clone();
-            let lbl_cb = lbl_c.clone();
+            let entry_cb = entry_c.clone();
             dialog.open(Some(&win_c), gio::Cancellable::NONE, move |res| {
                 if let Ok(file) = res {
                     if let Some(p) = file.path() {
-                        lbl_cb.set_label(&p.display().to_string());
+                        entry_cb.set_text(&p.display().to_string());
                         *cover_cb.borrow_mut() = Some(p);
                     }
                 }
@@ -131,11 +130,10 @@ pub fn show_create_album_dialog(
 
     {
         let cover_c = cover_path.clone();
-        let lbl_c = cover_label.clone();
-        let default_lbl = tr.t("gui.cover_image").to_string();
+        let entry_c = cover_entry.clone();
         clear_btn.connect_clicked(move |_| {
             *cover_c.borrow_mut() = None;
-            lbl_c.set_label(&default_lbl);
+            entry_c.set_text("");
         });
     }
 
@@ -188,15 +186,15 @@ pub fn show_create_album_dialog(
     win.present();
 }
 
-/// Opens a track details viewer & metadata editor dialog.
+/// Classic two-column track details viewer & metadata editor dialog.
 pub fn show_track_editor_dialog(
-    parent: &adw::ApplicationWindow,
+    parent: &gtk4::ApplicationWindow,
     tr: &Translator,
     track: &TrackMetadata,
     can_write: bool,
     on_save: UpdateTrackCallback,
 ) {
-    let win = adw::Window::builder()
+    let win = gtk4::Window::builder()
         .title(&track.title)
         .transient_for(parent)
         .modal(true)
@@ -204,96 +202,51 @@ pub fn show_track_editor_dialog(
         .resizable(false)
         .build();
 
-    let header = adw::HeaderBar::new();
-    header.set_show_start_title_buttons(false);
-    header.set_show_end_title_buttons(false);
-    let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
-    let save_btn = gtk4::Button::with_label(tr.t("gui.save"));
-    save_btn.add_css_class("primary-btn");
-    save_btn.set_sensitive(can_write);
-    header.pack_start(&cancel_btn);
-    header.pack_end(&save_btn);
-
-    let title_row = adw::EntryRow::builder()
-        .title(tr.t("gui.track_title"))
-        .text(&track.title)
-        .editable(can_write)
-        .build();
-    let artist_row = adw::EntryRow::builder()
-        .title(tr.t("gui.artist_name"))
-        .text(&track.artist)
-        .editable(can_write)
-        .build();
-    let album_row = adw::EntryRow::builder()
-        .title(tr.t("gui.album_name"))
-        .text(&track.album)
-        .editable(can_write)
-        .build();
-    let genre_row = adw::EntryRow::builder()
-        .title(tr.t("gui.track_genre"))
-        .text(&track.genre)
-        .editable(can_write)
-        .build();
-    let track_nr_row = adw::EntryRow::builder()
-        .title(tr.t("gui.track_number"))
-        .text(
-            track
-                .track_number
-                .map(|v| v.to_string())
-                .unwrap_or_default(),
-        )
-        .editable(can_write)
-        .build();
-    let disc_nr_row = adw::EntryRow::builder()
-        .title(tr.t("gui.track_disc"))
-        .text(track.disc_number.map(|v| v.to_string()).unwrap_or_default())
-        .editable(can_write)
-        .build();
-    let year_row = adw::EntryRow::builder()
-        .title(tr.t("gui.track_year"))
-        .text(track.year.map(|v| v.to_string()).unwrap_or_default())
-        .editable(can_write)
+    let grid = gtk4::Grid::builder()
+        .row_spacing(8)
+        .column_spacing(12)
         .build();
 
-    let meta_group = adw::PreferencesGroup::new();
-    meta_group.add(&title_row);
-    meta_group.add(&artist_row);
-    meta_group.add(&album_row);
-    meta_group.add(&genre_row);
-    meta_group.add(&track_nr_row);
-    meta_group.add(&disc_nr_row);
-    meta_group.add(&year_row);
+    let title_entry = make_entry(&track.title, can_write);
+    let artist_entry = make_entry(&track.artist, can_write);
+    let album_entry = make_entry(&track.album, can_write);
+    let genre_entry = make_entry(&track.genre, can_write);
+    let track_nr_entry = make_entry(
+        &track
+            .track_number
+            .map(|v| v.to_string())
+            .unwrap_or_default(),
+        can_write,
+    );
+    let disc_nr_entry = make_entry(
+        &track.disc_number.map(|v| v.to_string()).unwrap_or_default(),
+        can_write,
+    );
+    let year_entry = make_entry(
+        &track.year.map(|v| v.to_string()).unwrap_or_default(),
+        can_write,
+    );
 
-    let duration_sec = track.duration_ms / 1000;
-    let size_mb = track.size_bytes as f64 / (1024.0 * 1024.0);
-    let details_lbl = gtk4::Label::builder()
-        .xalign(0.0)
-        .css_classes(["dim-label", "caption"])
-        .label(format!(
-            "{}: {}:{:02}  |  {} kbps  |  {:.2} MB  |  ID {}",
-            tr.t("gui.track_details"),
-            duration_sec / 60,
-            duration_sec % 60,
-            track.bitrate_kbps,
-            size_mb,
-            track.id
-        ))
+    let num_row = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Horizontal)
+        .spacing(8)
+        .homogeneous(true)
         .build();
+    num_row.append(&track_nr_entry);
+    num_row.append(&disc_nr_entry);
+    num_row.append(&year_entry);
 
     let new_cover: Rc<RefCell<Option<PathBuf>>> = Rc::new(RefCell::new(None));
     let clear_cover: Rc<RefCell<bool>> = Rc::new(RefCell::new(false));
-    let cover_status = gtk4::Label::builder()
-        .xalign(0.0)
-        .ellipsize(gtk4::pango::EllipsizeMode::Middle)
+    let cover_entry = gtk4::Entry::builder()
         .hexpand(true)
-        .css_classes(["dim-label"])
-        .label(if track.has_artwork {
+        .editable(false)
+        .text(if track.has_artwork {
             tr.t("gui.cover_keep")
         } else {
             "-"
         })
         .build();
-
     let pick_cover_btn = gtk4::Button::builder()
         .label(tr.t("gui.select_cover"))
         .sensitive(can_write)
@@ -303,38 +256,83 @@ pub fn show_track_editor_dialog(
         .sensitive(can_write)
         .build();
 
-    let cover_box = gtk4::Box::builder()
+    let cover_row = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Horizontal)
+        .spacing(6)
+        .build();
+    cover_row.append(&cover_entry);
+    cover_row.append(&pick_cover_btn);
+    cover_row.append(&rm_cover_btn);
+
+    let duration_sec = track.duration_ms / 1000;
+    let size_mb = track.size_bytes as f64 / (1024.0 * 1024.0);
+    let details_lbl = gtk4::Label::builder()
+        .xalign(0.0)
+        .css_classes(["muted"])
+        .label(format!(
+            "{}:{:02}  |  {} kbps  |  {:.2} MB  |  ID {}",
+            duration_sec / 60,
+            duration_sec % 60,
+            track.bitrate_kbps,
+            size_mb,
+            track.id
+        ))
+        .build();
+
+    grid.attach(&make_field_label(tr.t("gui.track_title")), 0, 0, 1, 1);
+    grid.attach(&title_entry, 1, 0, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.artist_name")), 0, 1, 1, 1);
+    grid.attach(&artist_entry, 1, 1, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.album_name")), 0, 2, 1, 1);
+    grid.attach(&album_entry, 1, 2, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.track_genre")), 0, 3, 1, 1);
+    grid.attach(&genre_entry, 1, 3, 1, 1);
+    grid.attach(
+        &make_field_label(&format!(
+            "{} / {} / {}",
+            tr.t("gui.track_number"),
+            tr.t("gui.track_disc"),
+            tr.t("gui.track_year")
+        )),
+        0,
+        4,
+        1,
+        1,
+    );
+    grid.attach(&num_row, 1, 4, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.cover_image")), 0, 5, 1, 1);
+    grid.attach(&cover_row, 1, 5, 1, 1);
+    grid.attach(&make_field_label(tr.t("gui.track_details")), 0, 6, 1, 1);
+    grid.attach(&details_lbl, 1, 6, 1, 1);
+
+    let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
+    let save_btn = gtk4::Button::builder()
+        .label(tr.t("gui.save"))
+        .sensitive(can_write)
+        .css_classes(["primary-btn"])
+        .build();
+
+    let btn_row = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Horizontal)
         .spacing(8)
+        .halign(gtk4::Align::End)
+        .margin_top(4)
         .build();
-    cover_box.append(&pick_cover_btn);
-    cover_box.append(&rm_cover_btn);
+    btn_row.append(&save_btn);
+    btn_row.append(&cancel_btn);
 
-    let content = gtk4::Box::builder()
+    let root = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
         .spacing(12)
-        .margin_top(16)
-        .margin_bottom(16)
-        .margin_start(16)
-        .margin_end(16)
+        .margin_top(14)
+        .margin_bottom(14)
+        .margin_start(14)
+        .margin_end(14)
         .build();
-    content.append(&meta_group);
-    content.append(&cover_box);
-    content.append(&cover_status);
-    content.append(&details_lbl);
-
-    let scrolled = gtk4::ScrolledWindow::builder()
-        .vexpand(true)
-        .min_content_height(420)
-        .kinetic_scrolling(false)
-        .child(&content)
-        .build();
-
-    let toolbar = adw::ToolbarView::new();
-    toolbar.set_top_bar_style(adw::ToolbarStyle::Raised);
-    toolbar.add_top_bar(&header);
-    toolbar.set_content(Some(&scrolled));
-    win.set_content(Some(&toolbar));
+    root.append(&grid);
+    root.append(&gtk4::Separator::new(gtk4::Orientation::Horizontal));
+    root.append(&btn_row);
+    win.set_child(Some(&root));
 
     {
         let win_c = win.clone();
@@ -345,7 +343,7 @@ pub fn show_track_editor_dialog(
         let win_c = win.clone();
         let new_c = new_cover.clone();
         let clear_c = clear_cover.clone();
-        let lbl_c = cover_status.clone();
+        let entry_c = cover_entry.clone();
         let dlg_title = tr.t("gui.select_cover").to_string();
         pick_cover_btn.connect_clicked(move |_| {
             let filter = gtk4::FileFilter::new();
@@ -362,11 +360,11 @@ pub fn show_track_editor_dialog(
                 .build();
             let new_cb = new_c.clone();
             let clear_cb = clear_c.clone();
-            let lbl_cb = lbl_c.clone();
+            let entry_cb = entry_c.clone();
             dialog.open(Some(&win_c), gio::Cancellable::NONE, move |res| {
                 if let Ok(file) = res {
                     if let Some(p) = file.path() {
-                        lbl_cb.set_label(&p.display().to_string());
+                        entry_cb.set_text(&p.display().to_string());
                         *new_cb.borrow_mut() = Some(p);
                         *clear_cb.borrow_mut() = false;
                     }
@@ -378,12 +376,12 @@ pub fn show_track_editor_dialog(
     {
         let new_c = new_cover.clone();
         let clear_c = clear_cover.clone();
-        let lbl_c = cover_status.clone();
+        let entry_c = cover_entry.clone();
         let cleared_lbl = tr.t("gui.cover_clear").to_string();
         rm_cover_btn.connect_clicked(move |_| {
             *new_c.borrow_mut() = None;
             *clear_c.borrow_mut() = true;
-            lbl_c.set_label(&cleared_lbl);
+            entry_c.set_text(&cleared_lbl);
         });
     }
 
@@ -392,13 +390,13 @@ pub fn show_track_editor_dialog(
         let track_id = track.id;
         save_btn.connect_clicked(move |_| {
             let req = UpdateTrackRequest {
-                title: Some(title_row.text().to_string()),
-                artist: Some(artist_row.text().to_string()),
-                album: Some(album_row.text().to_string()),
-                genre: Some(genre_row.text().to_string()),
-                track_number: track_nr_row.text().trim().parse::<u32>().ok(),
-                disc_number: disc_nr_row.text().trim().parse::<u32>().ok(),
-                year: year_row.text().trim().parse::<u32>().ok(),
+                title: Some(title_entry.text().to_string()),
+                artist: Some(artist_entry.text().to_string()),
+                album: Some(album_entry.text().to_string()),
+                genre: Some(genre_entry.text().to_string()),
+                track_number: track_nr_entry.text().trim().parse::<u32>().ok(),
+                disc_number: disc_nr_entry.text().trim().parse::<u32>().ok(),
+                year: year_entry.text().trim().parse::<u32>().ok(),
                 artwork_path: new_cover.borrow().clone(),
                 clear_artwork: *clear_cover.borrow(),
             };
@@ -408,4 +406,85 @@ pub fn show_track_editor_dialog(
     }
 
     win.present();
+}
+
+/// Simple classic yes/no confirmation dialog.
+pub fn show_confirm_dialog(
+    parent: &gtk4::ApplicationWindow,
+    title: &str,
+    message: &str,
+    confirm_label: &str,
+    cancel_label: &str,
+    on_confirm: ConfirmCallback,
+) {
+    let win = gtk4::Window::builder()
+        .title(title)
+        .transient_for(parent)
+        .modal(true)
+        .default_width(360)
+        .resizable(false)
+        .build();
+
+    let msg_lbl = gtk4::Label::builder()
+        .xalign(0.0)
+        .wrap(true)
+        .label(message)
+        .build();
+    let ok_btn = gtk4::Button::builder()
+        .label(confirm_label)
+        .css_classes(["primary-btn"])
+        .build();
+    let cancel_btn = gtk4::Button::with_label(cancel_label);
+
+    let btn_row = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Horizontal)
+        .spacing(8)
+        .halign(gtk4::Align::End)
+        .build();
+    btn_row.append(&ok_btn);
+    btn_row.append(&cancel_btn);
+
+    let root = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .spacing(12)
+        .margin_top(14)
+        .margin_bottom(14)
+        .margin_start(14)
+        .margin_end(14)
+        .build();
+    root.append(&msg_lbl);
+    root.append(&gtk4::Separator::new(gtk4::Orientation::Horizontal));
+    root.append(&btn_row);
+    win.set_child(Some(&root));
+
+    {
+        let win_c = win.clone();
+        cancel_btn.connect_clicked(move |_| win_c.close());
+    }
+    {
+        let win_c = win.clone();
+        ok_btn.connect_clicked(move |_| {
+            win_c.close();
+            on_confirm();
+        });
+    }
+
+    win.present();
+}
+
+fn make_field_label(text: &str) -> gtk4::Label {
+    gtk4::Label::builder()
+        .xalign(1.0)
+        .label(text)
+        .css_classes(["muted"])
+        .build()
+}
+
+fn make_entry(text: &str, editable: bool) -> gtk4::Entry {
+    gtk4::Entry::builder()
+        .hexpand(true)
+        .text(text)
+        .editable(editable)
+        .sensitive(editable)
+        .build()
 }

@@ -18,7 +18,7 @@ PodDrop is designed for Linux users who want a clean, fast, and reliable way to 
 
 ### Planned Features
 
-- Lightweight native Linux GUI (GTK4 + libadwaita)
+- Lightweight native Linux GUI (GTK4)
 - High-compatibility database sync (`iTunesDB` / `Hash58` / `Hash72`) via `libgpod`
 - Album artwork registration (`ArtworkDB` / RGB565 `.ithmb` conversion)
 - Safe pre-write backup of device databases
