@@ -1,7 +1,8 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::device::DeviceInfo;
 use crate::error::Result;
+use crate::media::TranscodeFormat;
 
 /// Normalized track metadata read from or written to an iPod database.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -16,6 +17,29 @@ pub struct TrackMetadata {
     pub has_artwork: bool,
 }
 
+/// Request payload for transferring a track and optional artwork to an iPod.
+#[derive(Debug, Clone)]
+pub struct TransferTrackRequest {
+    pub audio_path: PathBuf,
+    pub artwork_path: Option<PathBuf>,
+    pub transcode_format: TranscodeFormat,
+    pub title_override: Option<String>,
+    pub artist_override: Option<String>,
+    pub album_override: Option<String>,
+}
+
+/// Result of transferring a track to an iPod.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TransferTrackResult {
+    pub track_id: u64,
+    pub title: String,
+    pub artist: String,
+    pub album: String,
+    pub transcoded: bool,
+    pub artwork_registered: bool,
+    pub backup_path: Option<PathBuf>,
+}
+
 /// Abstract backend interface for interacting with iPod databases.
 ///
 /// Decoupling the UI and core workflows behind this trait allows supporting
@@ -23,4 +47,11 @@ pub struct TrackMetadata {
 pub trait IpodBackend {
     fn inspect_device(&self, mount_path: &Path) -> Result<DeviceInfo>;
     fn list_tracks(&self, mount_path: &Path) -> Result<Vec<TrackMetadata>>;
+    fn transfer_track(
+        &self,
+        mount_path: &Path,
+        request: &TransferTrackRequest,
+        backup_root: Option<&Path>,
+    ) -> Result<TransferTrackResult>;
+    fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()>;
 }

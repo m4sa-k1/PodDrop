@@ -1,12 +1,14 @@
 use std::ffi::{CStr, CString};
 use std::fs;
 use std::os::raw::{c_char, c_int};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::ptr;
 
-use crate::backend::{IpodBackend, TrackMetadata};
+use crate::backend::{IpodBackend, TrackMetadata, TransferTrackRequest, TransferTrackResult};
+use crate::backup::create_prewrite_backup;
 use crate::device::{DeviceInfo, DeviceModel, FilesystemType};
 use crate::error::{PodDropError, Result};
+use crate::media::{extract_embedded_artwork, probe_audio, transcode_for_ipod};
 
 #[repr(C)]
 struct PodDropGpodDeviceInfo {
@@ -31,6 +33,20 @@ struct PodDropGpodTrack {
     has_artwork: i32,
 }
 
+#[repr(C)]
+struct PodDropGpodAddTrackRequest {
+    audio_path: *const c_char,
+    artwork_path: *const c_char,
+    title: *const c_char,
+    artist: *const c_char,
+    album: *const c_char,
+    track_number: i32,
+    disc_number: i32,
+    duration_ms: i32,
+    bitrate_kbps: i32,
+    samplerate_hz: u16,
+}
+
 extern "C" {
     fn poddrop_gpod_inspect(
         mount_path: *const c_char,
@@ -51,6 +67,17 @@ extern "C" {
     fn poddrop_read_sysinfo_vpd(
         dev_path: *const c_char,
         out_xml: *mut *mut c_char,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_add_track(
+        mount_path: *const c_char,
+        req: *const PodDropGpodAddTrackRequest,
+        out_track_id: *mut u64,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+    fn poddrop_gpod_remove_track(
+        mount_path: *const c_char,
+        track_id: u64,
         out_err: *mut *mut c_char,
     ) -> c_int;
 }
@@ -175,6 +202,129 @@ impl IpodBackend for LibgpodBackend {
         unsafe { poddrop_gpod_free_tracks(tracks_ptr, count) };
         Ok(result)
     }
+
+    fn transfer_track(
+        &self,
+        mount_path: &Path,
+        request: &TransferTrackRequest,
+        backup_root: Option<&Path>,
+    ) -> Result<TransferTrackResult> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+
+        let backup_path = if let Some(root) = backup_root {
+            Some(create_prewrite_backup(mount_path, root)?)
+        } else {
+            None
+        };
+
+        let audio_info = probe_audio(&request.audio_path)?;
+        let title = request
+            .title_override
+            .clone()
+            .unwrap_or_else(|| audio_info.title.clone());
+        let artist = request
+            .artist_override
+            .clone()
+            .unwrap_or_else(|| audio_info.artist.clone());
+        let album = request
+            .album_override
+            .clone()
+            .unwrap_or_else(|| audio_info.album.clone());
+
+        let work_dir = create_temp_work_dir()?;
+        let _cleanup = TempDirGuard(work_dir.clone());
+
+        let (final_audio_path, transcoded) = if audio_info.is_ipod_native(&request.audio_path) {
+            (request.audio_path.clone(), false)
+        } else {
+            let out = transcode_for_ipod(&request.audio_path, &work_dir, request.transcode_format)?;
+            (out, true)
+        };
+
+        let resolved_artwork: Option<PathBuf> = if let Some(art_path) = &request.artwork_path {
+            if art_path.is_file() {
+                Some(art_path.clone())
+            } else {
+                return Err(PodDropError::Io(format!(
+                    "Artwork file not found: {}",
+                    art_path.display()
+                )));
+            }
+        } else if audio_info.has_embedded_art {
+            let extracted = work_dir.join("cover.png");
+            if extract_embedded_artwork(&request.audio_path, &extracted)? {
+                Some(extracted)
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_audio = path_to_cstring(&final_audio_path)?;
+        let c_art = resolved_artwork
+            .as_deref()
+            .map(path_to_cstring)
+            .transpose()?;
+        let c_title = str_to_cstring(&title)?;
+        let c_artist = str_to_cstring(&artist)?;
+        let c_album = str_to_cstring(&album)?;
+
+        let raw_req = PodDropGpodAddTrackRequest {
+            audio_path: c_audio.as_ptr(),
+            artwork_path: c_art.as_ref().map_or(ptr::null(), |c| c.as_ptr()),
+            title: c_title.as_ptr(),
+            artist: c_artist.as_ptr(),
+            album: c_album.as_ptr(),
+            track_number: audio_info.track_number.unwrap_or(0) as i32,
+            disc_number: audio_info.disc_number.unwrap_or(0) as i32,
+            duration_ms: audio_info.duration_ms as i32,
+            bitrate_kbps: audio_info.bitrate_kbps as i32,
+            samplerate_hz: u16::try_from(audio_info.samplerate_hz).unwrap_or(44100),
+        };
+
+        let mut track_id: u64 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            poddrop_gpod_add_track(c_mount.as_ptr(), &raw_req, &mut track_id, &mut err_ptr)
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+
+        Ok(TransferTrackResult {
+            track_id,
+            title,
+            artist,
+            album,
+            transcoded,
+            artwork_registered: info.supports_artwork && resolved_artwork.is_some(),
+            backup_path,
+        })
+    }
+
+    fn remove_track(&self, mount_path: &Path, track_id: u64) -> Result<()> {
+        let info = self.inspect_device(mount_path)?;
+        if info.is_read_only {
+            return Err(PodDropError::ReadOnlyFilesystem(
+                info.filesystem.as_str().to_string(),
+            ));
+        }
+
+        let c_mount = path_to_cstring(mount_path)?;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe { poddrop_gpod_remove_track(c_mount.as_ptr(), track_id, &mut err_ptr) };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(())
+    }
 }
 
 fn validate_mount_path(mount_path: &Path) -> Result<()> {
@@ -189,6 +339,28 @@ fn validate_mount_path(mount_path: &Path) -> Result<()> {
 fn path_to_cstring(path: &Path) -> Result<CString> {
     CString::new(path.to_string_lossy().as_bytes())
         .map_err(|e| PodDropError::Io(format!("Invalid path: {e}")))
+}
+
+fn str_to_cstring(s: &str) -> Result<CString> {
+    CString::new(s.as_bytes()).map_err(|e| PodDropError::Io(format!("Invalid string: {e}")))
+}
+
+fn create_temp_work_dir() -> Result<PathBuf> {
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or(0);
+    let dir = std::env::temp_dir().join(format!("poddrop_work_{}_{}", std::process::id(), ts));
+    fs::create_dir_all(&dir).map_err(|e| PodDropError::Io(e.to_string()))?;
+    Ok(dir)
+}
+
+struct TempDirGuard(PathBuf);
+
+impl Drop for TempDirGuard {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
 }
 
 fn take_c_error(err_ptr: *mut c_char) -> String {

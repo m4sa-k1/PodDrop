@@ -227,3 +227,144 @@ int poddrop_read_sysinfo_vpd(const char *dev_path, char **out_xml, char **out_er
     *out_xml = g_string_free(xml, FALSE);
     return 0;
 }
+
+typedef struct {
+    const char *audio_path;
+    const char *artwork_path;
+    const char *title;
+    const char *artist;
+    const char *album;
+    int32_t track_number;
+    int32_t disc_number;
+    int32_t duration_ms;
+    int32_t bitrate_kbps;
+    uint16_t samplerate_hz;
+} PodDropGpodAddTrackRequest;
+
+int poddrop_gpod_add_track(
+    const char *mount_path,
+    const PodDropGpodAddTrackRequest *req,
+    uint64_t *out_track_id,
+    char **out_err
+) {
+    if (!mount_path || !req || !req->audio_path) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Track *track = itdb_track_new();
+    track->title = dup_cstr_or_empty(req->title);
+    track->artist = dup_cstr_or_empty(req->artist);
+    track->album = dup_cstr_or_empty(req->album);
+    track->track_nr = req->track_number;
+    track->cd_nr = req->disc_number;
+    track->tracklen = req->duration_ms;
+    track->bitrate = req->bitrate_kbps;
+    track->samplerate = req->samplerate_hz;
+    track->mediatype = ITDB_MEDIATYPE_AUDIO;
+
+    itdb_track_add(itdb, track, -1);
+    Itdb_Playlist *mpl = itdb_playlist_mpl(itdb);
+    if (mpl) {
+        itdb_playlist_add_track(mpl, track, -1);
+    }
+
+    if (req->artwork_path && req->artwork_path[0] != '\0') {
+        if (itdb->device && itdb_device_supports_artwork(itdb->device)) {
+            if (!itdb_track_set_thumbnails(track, req->artwork_path)) {
+                if (out_err) *out_err = g_strdup("Failed to set track artwork thumbnail");
+                itdb_free(itdb);
+                return -1;
+            }
+        }
+    }
+
+    if (!itdb_cp_track_to_ipod(track, req->audio_path, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to copy audio file to iPod");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB/ArtworkDB");
+        }
+        if (err) g_error_free(err);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (out_track_id) {
+        *out_track_id = (uint64_t)track->id;
+    }
+    itdb_free(itdb);
+    return 0;
+}
+
+int poddrop_gpod_remove_track(
+    const char *mount_path,
+    uint64_t track_id,
+    char **out_err
+) {
+    if (!mount_path) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    Itdb_Track *track = itdb_track_by_id(itdb, (guint32)track_id);
+    if (!track) {
+        if (out_err) *out_err = g_strdup_printf("Track ID %" G_GUINT64_FORMAT " not found", track_id);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    gchar *ipod_file = itdb_filename_on_ipod(track);
+    for (GList *l = itdb->playlists; l != NULL; l = l->next) {
+        Itdb_Playlist *pl = (Itdb_Playlist *)l->data;
+        if (pl && itdb_playlist_contains_track(pl, track)) {
+            itdb_playlist_remove_track(pl, track);
+        }
+    }
+    itdb_track_remove(track);
+
+    if (!itdb_write(itdb, &err)) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to write iTunesDB after removal");
+        }
+        if (err) g_error_free(err);
+        g_free(ipod_file);
+        itdb_free(itdb);
+        return -1;
+    }
+
+    if (ipod_file) {
+        unlink(ipod_file);
+        g_free(ipod_file);
+    }
+
+    itdb_free(itdb);
+    return 0;
+}
