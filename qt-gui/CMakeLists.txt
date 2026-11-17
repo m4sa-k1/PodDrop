@@ -48,3 +48,10 @@ target_link_libraries(poddrop-gui PRIVATE
 )
 
 target_compile_options(poddrop-gui PRIVATE -Wall -Wextra)
+
+include(GNUInstallDirs)
+install(TARGETS poddrop-gui RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(FILES "${WORKSPACE_ROOT}/packaging/io.github.m4sa_k1.PodDrop.desktop"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/applications")
+install(FILES "${WORKSPACE_ROOT}/packaging/io.github.m4sa_k1.PodDrop.svg"
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps")

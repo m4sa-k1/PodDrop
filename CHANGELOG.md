@@ -5,16 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.1.0] - 2026-11-17
 
 ### Added
-- Initial repository structure, GPL-3.0-or-later license, and Cargo workspace (`poddrop-core`, `poddrop-cli`, `poddrop-gui`).
-- Architecture and phased roadmap documentation (`docs/architecture.md`, `docs/roadmap.md`).
-- GitHub Actions CI workflow (`fmt`, `clippy`, `test`).
-- Minimal core models, error types, and bilingual (`en`/`ja`) localization scaffolding.
-- Read-only `libgpod` FFI backend and filesystem/mount detection (`poddrop-core`).
-- Built-in SCSI VPD (`0xC0`+) `SysInfoExtended` reader via `SG_IO` (`poddrop-core`, `poddrop-cli`).
-- `poddrop-cli inspect` and `poddrop-cli read-sysinfo` commands.
-- Pre-write backup, `ffprobe`/`ffmpeg` metadata & transcode pipeline, `iTunesDB`/`ArtworkDB` track transfer & removal (`poddrop-core`, `poddrop-cli`).
-- C ABI static library bridge (`poddrop-ffi`) exposing `poddrop-core` for native C++ GUIs.
-- Classic Qt6 Widgets GUI (`qt-gui`) with menu bar, toolbar, sortable/resizable track table, album sidebar, track metadata editor, drag & drop transfer, read-only guard, and live `en`/`ja` + Light/Dark monochrome switching.
+- Initial public release of PodDrop (`GPL-3.0-or-later`).
+- Rust core (`poddrop-core`), diagnostic/transfer CLI (`poddrop-cli`), and C ABI bridge (`poddrop-ffi`).
+- `libgpod` FFI integration for `iTunesDB` / `ArtworkDB` read/write and RGB565 `.ithmb` thumbnail extraction.
+- Built-in SCSI VPD (`0xC0`+) `SysInfoExtended` reader via Linux `SG_IO`.
+- Pre-write automatic backups and `ffprobe` / `ffmpeg` audio inspection and transcoding (`AAC`, `ALAC`, `MP3`).
+- Classic Qt6 Widgets GUI (`qt-gui`) featuring album browser, sortable track table, track & album metadata editors, live cover image preview, drag & drop transfer, safe eject (`unmount` + `power-off`), bilingual (`en`/`ja`) UI, and monochrome Light/Dark themes.
+- Desktop entry and SVG icon (`packaging/`), GitHub Actions CI workflow.

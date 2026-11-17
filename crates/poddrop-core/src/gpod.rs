@@ -546,6 +546,7 @@ pub fn eject_ipod(mount_path: &Path) -> Result<()> {
             .output()
         {
             if out.status.success() {
+                power_off_parent_drive(&dev);
                 return Ok(());
             }
         }
@@ -563,6 +564,27 @@ pub fn eject_ipod(mount_path: &Path) -> Result<()> {
             String::from_utf8_lossy(&out.stderr).trim().to_string(),
         ))
     }
+}
+
+fn power_off_parent_drive(part_dev: &str) {
+    let parent_dev = std::process::Command::new("lsblk")
+        .args(["-no", "PKNAME", part_dev])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .and_then(|o| {
+            let name = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if name.is_empty() {
+                None
+            } else {
+                Some(format!("/dev/{name}"))
+            }
+        })
+        .unwrap_or_else(|| part_dev.to_string());
+
+    let _ = std::process::Command::new("udisksctl")
+        .args(["power-off", "-b", &parent_dev])
+        .output();
 }
 
 fn validate_mount_path(mount_path: &Path) -> Result<()> {
