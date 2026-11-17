@@ -43,7 +43,7 @@ jobs:
           mkdir -p "dist/${PKG_DIR}"
           cmake --install build --prefix "dist/${PKG_DIR}/files"
           install -Dm755 target/release/poddrop-cli "dist/${PKG_DIR}/files/bin/poddrop-cli"
-          cp LICENSE README.md CHANGELOG.md "dist/${PKG_DIR}/"
+          cp LICENSE README.md CHANGELOG.md TERMS.md "dist/${PKG_DIR}/"
 
           cat <<'EOF' > "dist/${PKG_DIR}/install.sh"
           #!/usr/bin/env bash

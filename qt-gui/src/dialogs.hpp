@@ -137,3 +137,4 @@ std::optional<PlaylistPickResult> runPickPlaylistDialog(
 );
 
 void showSystemInfoDialog(QWidget *parent, UiLang lang);
+void showTermsDialog(QWidget *parent, UiLang lang);

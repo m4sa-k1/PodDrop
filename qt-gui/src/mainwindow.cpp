@@ -121,6 +121,7 @@ void MainWindow::setupUi() {
 
     m_helpMenu = menuBar()->addMenu(QString());
     m_actSysInfo = m_helpMenu->addAction(st->standardIcon(QStyle::SP_MessageBoxInformation), QString());
+    m_actTerms = m_helpMenu->addAction(st->standardIcon(QStyle::SP_FileDialogDetailedView), QString());
 
     // Top-right close button on menu bar
     m_closeBtn = new QToolButton(this);
@@ -332,6 +333,9 @@ void MainWindow::setupUi() {
     connect(m_actSysInfo, &QAction::triggered, this, [this]() {
         showSystemInfoDialog(this, m_lang);
     });
+    connect(m_actTerms, &QAction::triggered, this, [this]() {
+        showTermsDialog(this, m_lang);
+    });
 
     connect(m_addToAlbumBtn, &QPushButton::clicked, this, &MainWindow::addToSelectedAlbum);
     connect(m_editAlbumBtn, &QPushButton::clicked, this, &MainWindow::editSelectedAlbum);
@@ -457,6 +461,7 @@ void MainWindow::applyTranslations() {
     m_viewMenu->setTitle(trText(m_lang, "menu.view"));
     m_helpMenu->setTitle(trText(m_lang, "menu.help"));
     m_actSysInfo->setText(trText(m_lang, "act.sysinfo"));
+    m_actTerms->setText(trText(m_lang, "act.terms"));
 
     m_actOpen->setText(trText(m_lang, "act.open"));
     m_actRefresh->setText(trText(m_lang, "act.refresh"));

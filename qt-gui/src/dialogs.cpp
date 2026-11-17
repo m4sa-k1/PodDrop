@@ -3,6 +3,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDialogButtonBox>
+#include <QFile>
 #include <QFileDialog>
 #include <QFormLayout>
 #include <QHBoxLayout>
@@ -12,6 +13,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QTextBrowser>
 #include <QVBoxLayout>
 #include <unordered_map>
 
@@ -765,4 +767,28 @@ std::optional<PlaylistPickResult> runPickPlaylistDialog(
         return PlaylistPickResult{true, 0, newNameEdit->text().trimmed()};
     }
     return PlaylistPickResult{false, chosenId, QString()};
+}
+
+void showTermsDialog(QWidget *parent, UiLang lang) {
+    QDialog dlg(parent);
+    dlg.setWindowTitle(trText(lang, "act.terms"));
+    dlg.resize(640, 500);
+
+    auto *browser = new QTextBrowser(&dlg);
+    browser->setOpenExternalLinks(true);
+
+    QFile f(QStringLiteral(":/docs/TERMS.md"));
+    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        browser->setMarkdown(QString::fromUtf8(f.readAll()));
+    } else {
+        browser->setPlainText(QStringLiteral("TERMS.md not found."));
+    }
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addWidget(browser, 1);
+    root->addWidget(buttons);
+    dlg.exec();
 }

@@ -2,4 +2,7 @@
   <qresource prefix="/icons">
     <file>poddrop.png</file>
   </qresource>
+  <qresource prefix="/docs">
+    <file alias="TERMS.md">../../TERMS.md</file>
+  </qresource>
 </RCC>

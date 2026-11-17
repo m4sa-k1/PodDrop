@@ -120,6 +120,7 @@ private:
     QAction *m_actThemeLight = nullptr;
     QAction *m_actThemeDark = nullptr;
     QAction *m_actSysInfo = nullptr;
+    QAction *m_actTerms = nullptr;
 
     QToolBar *m_toolbar = nullptr;
     QToolButton *m_closeBtn = nullptr;

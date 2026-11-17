@@ -92,8 +92,9 @@ cmake --build build -j
 ./build/poddrop-gui
 ```
 
-### ⚠️ Disclaimer
-- **Only the Japanese text in the Disclaimer section below is legally and officially valid.** (See [免責事項](#免責事項) in the Japanese section.)
+### ⚠️ Terms of Use & Disclaimer
+- **Only the Japanese text in [TERMS.md](TERMS.md) is legally and officially valid.**
+- Please review [TERMS.md](TERMS.md) (also viewable in-app via `Help` -> `Terms of Use & Disclaimer...`) before using PodDrop.
 
 ### 📄 License
 Released under the [GNU General Public License v3.0 or later](LICENSE) (`GPL-3.0-or-later`).
@@ -195,13 +196,10 @@ cmake --build build -j
 ./build/poddrop-gui
 ```
 
-<a id="免責事項"></a>
+### ⚠️ 利用規約・免責事項
 
-### ⚠️ 免責事項
-
-- **非公式ソフトウェア**: PodDrop は個人・コミュニティによる非公式のオープンソースツールであり、Apple Inc. とは一切関係ありません（iPod・iTunes は Apple Inc. の登録商標または商標です）。
-- **無保証・自己責任**: 本ソフトウェアは現状有姿（AS-IS）で提供され、明示または黙示を問わずいかなる保証も行いません。本ソフトウェアの使用または使用不能により生じた、音楽データやデータベースの破損・消失、機器の不具合、その他一切の損害について、開発者および貢献者は責任を負いかねます。
-- **バックアップの推奨**: PodDrop は書き込み前に自動バックアップを作成しますが、大切な実機を保護するため、**初回利用前や重要な操作の前にはご自身でも `/iPod_Control/` や元データのバックアップを別途取得する**ことを強く推奨します。
+- **利用規約および免責事項の詳細は [TERMS.md](TERMS.md) に記載しています**（アプリ内の `ヘルプ` → `利用規約・免責事項...` からも確認できます）。
+- 本ソフトウェアは非公式のオープンソースツール（`GPL-3.0-or-later`・無保証）であり、Apple Inc. とは一切関係ありません。事前のバックアップおよび自己責任のもとでご利用ください。
 
 ### 📄 ライセンス
 
