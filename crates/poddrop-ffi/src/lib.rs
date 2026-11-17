@@ -10,7 +10,8 @@ use poddrop_core::backend::{
 };
 use poddrop_core::backup::default_backup_root;
 use poddrop_core::gpod::{discover_or_mount_ipods, eject_ipod, LibgpodBackend};
-use poddrop_core::media::TranscodeFormat;
+use poddrop_core::media::{validate_audio_file, TranscodeFormat};
+use poddrop_core::system::collect_system_diagnostics;
 use poddrop_core::APP_VERSION;
 
 #[repr(C)]
@@ -79,6 +80,16 @@ pub struct PodDropUpdateAlbumRequest {
     pub year: i32,
     pub artwork_path: *const c_char,
     pub clear_artwork: i32,
+}
+
+#[repr(C)]
+pub struct PodDropSystemInfo {
+    pub app_name: *mut c_char,
+    pub app_version: *mut c_char,
+    pub ffmpeg_version: *mut c_char,
+    pub ffprobe_version: *mut c_char,
+    pub udisksctl_status: *mut c_char,
+    pub backup_dir: *mut c_char,
 }
 
 static VERSION_CSTR: std::sync::LazyLock<CString> =
@@ -434,6 +445,75 @@ pub unsafe extern "C" fn poddrop_free_bytes(data: *mut u8, len: usize) {
     if !data.is_null() && len > 0 {
         drop(unsafe { Box::from_raw(std::ptr::slice_from_raw_parts_mut(data, len)) });
     }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_validate_audio(
+    audio_path: *const c_char,
+    out_size_bytes: *mut u64,
+    out_duration_ms: *mut u32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(path) = (unsafe { cstr_to_opt(audio_path) }) else {
+        set_err(out_err, "Invalid audio_path");
+        return -1;
+    };
+    match validate_audio_file(Path::new(&path)) {
+        Ok((info, size)) => {
+            if !out_size_bytes.is_null() {
+                unsafe { *out_size_bytes = size };
+            }
+            if !out_duration_ms.is_null() {
+                unsafe { *out_duration_ms = info.duration_ms };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_get_system_info(out_info: *mut PodDropSystemInfo) {
+    if out_info.is_null() {
+        return;
+    }
+    let diag = collect_system_diagnostics();
+    unsafe {
+        *out_info = PodDropSystemInfo {
+            app_name: to_c_char(&diag.app_name),
+            app_version: to_c_char(&diag.app_version),
+            ffmpeg_version: to_c_char(&diag.ffmpeg_version),
+            ffprobe_version: to_c_char(&diag.ffprobe_version),
+            udisksctl_status: to_c_char(&diag.udisksctl_status),
+            backup_dir: to_c_char(&diag.backup_dir),
+        };
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_free_system_info(info: *mut PodDropSystemInfo) {
+    if info.is_null() {
+        return;
+    }
+    let i = unsafe { &mut *info };
+    unsafe {
+        poddrop_free_string(i.app_name);
+        poddrop_free_string(i.app_version);
+        poddrop_free_string(i.ffmpeg_version);
+        poddrop_free_string(i.ffprobe_version);
+        poddrop_free_string(i.udisksctl_status);
+        poddrop_free_string(i.backup_dir);
+    }
+    i.app_name = ptr::null_mut();
+    i.app_version = ptr::null_mut();
+    i.ffmpeg_version = ptr::null_mut();
+    i.ffprobe_version = ptr::null_mut();
+    i.udisksctl_status = ptr::null_mut();
+    i.backup_dir = ptr::null_mut();
 }
 
 #[no_mangle]

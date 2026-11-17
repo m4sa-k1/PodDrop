@@ -72,6 +72,15 @@ typedef struct {
     int32_t clear_artwork;
 } PodDropUpdateAlbumRequest;
 
+typedef struct {
+    char *app_name;
+    char *app_version;
+    char *ffmpeg_version;
+    char *ffprobe_version;
+    char *udisksctl_status;
+    char *backup_dir;
+} PodDropSystemInfo;
+
 const char *poddrop_app_version(void);
 char *poddrop_discover_first_ipod(void);
 int32_t poddrop_inspect_device(const char *mount_path, PodDropDeviceInfo *out_info, char **out_err);
@@ -104,6 +113,14 @@ int32_t poddrop_get_track_artwork_png(
     char **out_err
 );
 int32_t poddrop_eject_device(const char *mount_path, char **out_err);
+int32_t poddrop_validate_audio(
+    const char *audio_path,
+    uint64_t *out_size_bytes,
+    uint32_t *out_duration_ms,
+    char **out_err
+);
+void poddrop_get_system_info(PodDropSystemInfo *out_info);
+void poddrop_free_system_info(PodDropSystemInfo *info);
 
 void poddrop_free_string(char *s);
 void poddrop_free_bytes(uint8_t *data, size_t len);

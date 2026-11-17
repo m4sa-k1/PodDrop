@@ -7,6 +7,7 @@ pub mod error;
 pub mod gpod;
 pub mod i18n;
 pub mod media;
+pub mod system;
 
 pub const APP_NAME: &str = "PodDrop";
 pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");

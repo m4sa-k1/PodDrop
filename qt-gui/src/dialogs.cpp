@@ -395,3 +395,47 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
         clearArtwork,
     };
 }
+
+void showSystemInfoDialog(QWidget *parent, UiLang lang) {
+    PodDropSystemInfo info{};
+    poddrop_get_system_info(&info);
+
+    auto take = [](char *p) -> QString {
+        if (!p) return QStringLiteral("-");
+        return QString::fromUtf8(p);
+    };
+
+    QDialog dlg(parent);
+    dlg.setWindowTitle(trText(lang, "act.sysinfo"));
+    dlg.setMinimumWidth(520);
+
+    auto *form = new QFormLayout();
+    auto addReadOnlyRow = [&](const QString &label, const QString &val) {
+        auto *lbl = new QLabel(val, &dlg);
+        lbl->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        lbl->setWordWrap(true);
+        form->addRow(label, lbl);
+    };
+
+    addReadOnlyRow(
+        trText(lang, "sys.version"),
+        QString("%1 v%2").arg(take(info.app_name), take(info.app_version))
+    );
+    addReadOnlyRow(trText(lang, "sys.license"), QStringLiteral("GPL-3.0-or-later"));
+    addReadOnlyRow(trText(lang, "sys.qt"), QString::fromUtf8(qVersion()));
+    addReadOnlyRow(QStringLiteral("ffmpeg:"), take(info.ffmpeg_version));
+    addReadOnlyRow(QStringLiteral("ffprobe:"), take(info.ffprobe_version));
+    addReadOnlyRow(QStringLiteral("udisksctl:"), take(info.udisksctl_status));
+    addReadOnlyRow(trText(lang, "sys.backup_dir"), take(info.backup_dir));
+    addReadOnlyRow(trText(lang, "sys.repo"), QStringLiteral("https://github.com/m4sa-k1/PodDrop"));
+
+    poddrop_free_system_info(&info);
+
+    auto *buttons = new QDialogButtonBox(QDialogButtonBox::Close, &dlg);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    auto *root = new QVBoxLayout(&dlg);
+    root->addLayout(form);
+    root->addWidget(buttons);
+    dlg.exec();
+}

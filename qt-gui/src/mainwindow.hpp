@@ -72,6 +72,7 @@ private:
         const QString &albumOverride,
         const QString &artistOverride
     );
+    void handleDroppedFolder(const QString &folderPath);
 
     std::optional<TrackItem> selectedTrack() const;
 
@@ -89,6 +90,7 @@ private:
     QMenu *m_fileMenu = nullptr;
     QMenu *m_editMenu = nullptr;
     QMenu *m_viewMenu = nullptr;
+    QMenu *m_helpMenu = nullptr;
     QAction *m_actOpen = nullptr;
     QAction *m_actRefresh = nullptr;
     QAction *m_actEject = nullptr;
@@ -102,6 +104,7 @@ private:
     QAction *m_actLangJa = nullptr;
     QAction *m_actThemeLight = nullptr;
     QAction *m_actThemeDark = nullptr;
+    QAction *m_actSysInfo = nullptr;
 
     QToolBar *m_toolbar = nullptr;
     QToolButton *m_closeBtn = nullptr;

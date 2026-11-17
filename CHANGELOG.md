@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- System & version diagnostics dialog (`Help -> About & System Info...`) showing app version, Qt version, `ffmpeg`/`ffprobe`/`udisksctl` status, and backup path.
+- Folder drag & drop album creation with strict pre-flight validation (file readability, `ffprobe` audio stream & duration checks, free space verification, and automatic cover image detection) before writing anything to the iPod.
+
 ## [0.1.0] - 2026-11-17
 
 ### Added

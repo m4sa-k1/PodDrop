@@ -80,6 +80,40 @@ pub fn probe_audio(path: &Path) -> Result<LocalAudioInfo> {
     Ok(parse_ffprobe_output(&text, path))
 }
 
+/// Strictly validates that an audio file is non-empty, readable, and contains a valid audio stream.
+pub fn validate_audio_file(path: &Path) -> Result<(LocalAudioInfo, u64)> {
+    let meta = fs::metadata(path)
+        .map_err(|e| PodDropError::Io(format!("Cannot access {}: {e}", path.display())))?;
+    if !meta.is_file() {
+        return Err(PodDropError::Io(format!(
+            "Not a regular file: {}",
+            path.display()
+        )));
+    }
+    if meta.len() == 0 {
+        return Err(PodDropError::Backend(format!(
+            "Empty file (0 bytes): {}",
+            path.display()
+        )));
+    }
+
+    let info = probe_audio(path)?;
+    if info.codec_name.is_empty() {
+        return Err(PodDropError::Backend(format!(
+            "No valid audio stream found: {}",
+            path.display()
+        )));
+    }
+    if info.duration_ms == 0 || info.samplerate_hz == 0 {
+        return Err(PodDropError::Backend(format!(
+            "Invalid audio duration or sample rate: {}",
+            path.display()
+        )));
+    }
+
+    Ok((info, meta.len()))
+}
+
 /// Extracts embedded cover art from an audio file into a JPEG/PNG image file.
 pub fn extract_embedded_artwork(audio_path: &Path, out_image_path: &Path) -> Result<bool> {
     if let Some(parent) = out_image_path.parent() {
@@ -263,5 +297,17 @@ TAG:disc=1/2
         assert_eq!(info.codec_name, "mp3");
         assert!(info.has_embedded_art);
         assert!(info.is_ipod_native(Path::new("song.mp3")));
+    }
+
+    #[test]
+    fn validate_audio_rejects_empty_and_missing_files() {
+        let missing = validate_audio_file(Path::new("/nonexistent/poddrop_missing.mp3"));
+        assert!(missing.is_err());
+
+        let tmp = std::env::temp_dir().join("poddrop_empty_test.mp3");
+        let _ = fs::write(&tmp, b"");
+        let empty_res = validate_audio_file(&tmp);
+        let _ = fs::remove_file(&tmp);
+        assert!(empty_res.is_err());
     }
 }

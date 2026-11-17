@@ -87,3 +87,5 @@ std::optional<AlbumEditResult> runAlbumEditorDialog(
     const QPixmap &currentCover,
     bool canWrite
 );
+
+void showSystemInfoDialog(QWidget *parent, UiLang lang);
