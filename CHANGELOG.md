@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - `Hide Singles` checkbox in the Albums tab (UI-only filter, does not modify the iPod) that hides albums containing `Single` in the name or having 1–2 non-instrumental tracks (with at most 4 total tracks).
+- Persistent UI settings via `QSettings` (window geometry, language, theme, transcode format, and `Hide Singles` state).
+- Multi-row selection (`Ctrl`/`Shift` click) in the track table for batch playlist addition, batch deletion, and batch export.
+- Export tracks from iPod to PC (`File -> Export to PC...` and track context menu) organized as `<Artist>/<Album>/<NN> - <Title>.<ext>`.
+- Pre-transfer duplicate track check with confirmation dialog (allows adding anyway if confirmed).
+- Library filter dropdown (`All`, `Missing Tags`, `Duplicates`).
 
 ## [0.1.6] - 2026-11-17
 

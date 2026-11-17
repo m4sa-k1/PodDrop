@@ -32,6 +32,62 @@ void MainWindow::startTransferBatch(
         const QByteArray albB = albumOverride.toUtf8();
         const QByteArray arB = artistOverride.toUtf8();
 
+        // Check for duplicate tracks before transferring.
+        QVector<QByteArray> pathBytes;
+        QVector<const char *> pathPtrs;
+        pathBytes.reserve(files.size());
+        pathPtrs.reserve(files.size());
+        for (const QString &f : files) {
+            pathBytes.push_back(f.toUtf8());
+            pathPtrs.push_back(pathBytes.last().constData());
+        }
+        char *dupTextRaw = nullptr;
+        char *dupErr = nullptr;
+        poddrop_check_duplicates(
+            mp.constData(),
+            pathPtrs.constData(),
+            static_cast<size_t>(pathPtrs.size()),
+            albB.isEmpty() ? nullptr : albB.constData(),
+            arB.isEmpty() ? nullptr : arB.constData(),
+            &dupTextRaw,
+            &dupErr
+        );
+        const QString dupText = takeCString(dupTextRaw);
+        takeCString(dupErr);
+
+        if (!dupText.isEmpty()) {
+            bool proceed = false;
+            QMetaObject::invokeMethod(
+                this,
+                [this, dupText, &proceed]() {
+                    QApplication::restoreOverrideCursor();
+                    const auto reply = QMessageBox::question(
+                        this,
+                        trText(m_lang, "dlg.dup_title"),
+                        trText(m_lang, "dlg.dup_confirm").arg(dupText)
+                    );
+                    proceed = (reply == QMessageBox::Yes);
+                    if (proceed) {
+                        QApplication::setOverrideCursor(Qt::WaitCursor);
+                    }
+                },
+                Qt::BlockingQueuedConnection
+            );
+            if (!proceed) {
+                QMetaObject::invokeMethod(
+                    this,
+                    [this]() {
+                        m_busy = false;
+                        m_statusMsg = trText(m_lang, "lbl.ready");
+                        applyTranslations();
+                        updateActionStates();
+                    },
+                    Qt::QueuedConnection
+                );
+                return;
+            }
+        }
+
         int succeeded = 0;
         QString firstError;
 

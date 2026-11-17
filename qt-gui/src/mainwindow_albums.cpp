@@ -231,13 +231,17 @@ void MainWindow::editSelectedTrack() {
 }
 
 void MainWindow::removeSelectedTrack() {
-    const auto trackOpt = selectedTrack();
-    if (!trackOpt.has_value() || m_device.isReadOnly) return;
+    const auto tracks = selectedTracks();
+    if (tracks.isEmpty() || m_device.isReadOnly) return;
+
+    const QString msg = (tracks.size() == 1)
+        ? QString("%1\n\n%2").arg(trText(m_lang, "dlg.remove_confirm"), tracks.first().title)
+        : trText(m_lang, "dlg.remove_multi_confirm").arg(tracks.size());
 
     const auto reply = QMessageBox::question(
         this,
         trText(m_lang, "act.remove_track"),
-        QString("%1\n\n%2").arg(trText(m_lang, "dlg.remove_confirm"), trackOpt->title)
+        msg
     );
     if (reply != QMessageBox::Yes) return;
 
@@ -247,12 +251,26 @@ void MainWindow::removeSelectedTrack() {
     QApplication::setOverrideCursor(Qt::WaitCursor);
 
     const QByteArray mp = m_mountPath.toUtf8();
-    const uint64_t tid = trackOpt->id;
+    QVector<uint64_t> ids;
+    ids.reserve(tracks.size());
+    for (const auto &t : tracks) {
+        ids.push_back(t.id);
+    }
 
-    std::thread([this, mp, tid]() {
-        char *err = nullptr;
-        const int32_t rc = poddrop_remove_track(mp.constData(), tid, &err);
-        const QString errMsg = takeCString(err);
+    std::thread([this, mp, ids]() {
+        int32_t rc = 0;
+        QString errMsg;
+        for (uint64_t tid : ids) {
+            char *err = nullptr;
+            if (poddrop_remove_track(mp.constData(), tid, &err) != 0) {
+                rc = -1;
+                if (errMsg.isEmpty()) {
+                    errMsg = takeCString(err);
+                } else {
+                    poddrop_free_string(err);
+                }
+            }
+        }
 
         QMetaObject::invokeMethod(
             this,

@@ -194,6 +194,14 @@ extern "C" {
         playlist_id: u64,
         out_err: *mut *mut c_char,
     ) -> c_int;
+    fn poddrop_gpod_export_tracks(
+        mount_path: *const c_char,
+        track_ids: *const u32,
+        track_count: u32,
+        dest_dir: *const c_char,
+        out_exported_count: *mut u32,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
 }
 
 /// Reads `SysInfoExtended` plist XML directly from an iPod block device via SCSI VPD (read-only).
@@ -779,6 +787,32 @@ impl IpodBackend for LibgpodBackend {
             return Err(PodDropError::Backend(take_c_error(err_ptr)));
         }
         Ok(())
+    }
+
+    fn export_tracks(&self, mount_path: &Path, track_ids: &[u32], dest_dir: &Path) -> Result<u32> {
+        validate_mount_path(mount_path)?;
+        let c_mount = path_to_cstring(mount_path)?;
+        let c_dest = path_to_cstring(dest_dir)?;
+        let mut exported: u32 = 0;
+        let mut err_ptr: *mut c_char = ptr::null_mut();
+        let rc = unsafe {
+            poddrop_gpod_export_tracks(
+                c_mount.as_ptr(),
+                if track_ids.is_empty() {
+                    ptr::null()
+                } else {
+                    track_ids.as_ptr()
+                },
+                track_ids.len() as u32,
+                c_dest.as_ptr(),
+                &mut exported,
+                &mut err_ptr,
+            )
+        };
+        if rc != 0 {
+            return Err(PodDropError::Backend(take_c_error(err_ptr)));
+        }
+        Ok(exported)
     }
 }
 

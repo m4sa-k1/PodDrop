@@ -115,6 +115,7 @@ pub trait IpodBackend {
         track_ids: &[u32],
     ) -> Result<u32>;
     fn remove_playlist(&self, mount_path: &Path, playlist_id: u64) -> Result<()>;
+    fn export_tracks(&self, mount_path: &Path, track_ids: &[u32], dest_dir: &Path) -> Result<u32>;
 }
 
 /// Metadata for a user or smart playlist on the iPod.

@@ -5,6 +5,7 @@
 #include <fcntl.h>
 #include <scsi/sg.h>
 #include <stdint.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
@@ -1042,6 +1043,182 @@ int32_t poddrop_gpod_remove_playlist(
         return -1;
     }
 
+    itdb_free(itdb);
+    return 0;
+}
+
+static gchar *sanitize_filename_component(const char *raw, const char *fallback) {
+    const char *src = (raw && raw[0] != '\0') ? raw : fallback;
+    gchar *clean = g_strdup(src);
+    for (gchar *p = clean; *p != '\0'; p++) {
+        switch (*p) {
+            case '/':
+            case '\\':
+            case ':':
+            case '*':
+            case '?':
+            case '"':
+            case '<':
+            case '>':
+            case '|':
+                *p = '_';
+                break;
+            default:
+                if ((unsigned char)*p < 0x20) {
+                    *p = '_';
+                }
+                break;
+        }
+    }
+    g_strstrip(clean);
+    if (clean[0] == '\0' || strcmp(clean, ".") == 0 || strcmp(clean, "..") == 0) {
+        g_free(clean);
+        return g_strdup(fallback);
+    }
+    return clean;
+}
+
+static gboolean copy_file_buffered(const char *src_path, const char *dst_path, char **out_err) {
+    FILE *in = fopen(src_path, "rb");
+    if (!in) {
+        if (out_err) *out_err = g_strdup_printf("Failed to open source file: %s", src_path);
+        return FALSE;
+    }
+    FILE *out = fopen(dst_path, "wb");
+    if (!out) {
+        fclose(in);
+        if (out_err) *out_err = g_strdup_printf("Failed to create output file: %s", dst_path);
+        return FALSE;
+    }
+
+    char buf[65536];
+    size_t n = 0;
+    gboolean ok = TRUE;
+    while ((n = fread(buf, 1, sizeof(buf), in)) > 0) {
+        if (fwrite(buf, 1, n, out) != n) {
+            ok = FALSE;
+            if (out_err) *out_err = g_strdup_printf("Write error: %s", dst_path);
+            break;
+        }
+    }
+    if (ok && ferror(in)) {
+        ok = FALSE;
+        if (out_err) *out_err = g_strdup_printf("Read error: %s", src_path);
+    }
+
+    fclose(in);
+    if (fclose(out) != 0 && ok) {
+        ok = FALSE;
+        if (out_err) *out_err = g_strdup_printf("Failed to close output file: %s", dst_path);
+    }
+    return ok;
+}
+
+static gboolean export_single_track(Itdb_Track *tr, const char *dest_dir, char **out_err) {
+    if (!tr) return FALSE;
+    gchar *src_path = itdb_filename_on_ipod(tr);
+    if (!src_path || !g_file_test(src_path, G_FILE_TEST_IS_REGULAR)) {
+        g_free(src_path);
+        return FALSE;
+    }
+
+    gchar *artist = sanitize_filename_component(
+        (tr->albumartist && tr->albumartist[0] != '\0') ? tr->albumartist : tr->artist,
+        "Unknown Artist"
+    );
+    gchar *album = sanitize_filename_component(tr->album, "Unknown Album");
+    gchar *title = sanitize_filename_component(tr->title, "Track");
+
+    const char *dot = strrchr(src_path, '.');
+    const char *ext = (dot && strlen(dot) <= 8) ? dot : ".m4a";
+
+    gchar *album_dir = g_build_filename(dest_dir, artist, album, NULL);
+    if (g_mkdir_with_parents(album_dir, 0755) != 0) {
+        if (out_err) *out_err = g_strdup_printf("Failed to create directory: %s", album_dir);
+        g_free(album_dir);
+        g_free(artist);
+        g_free(album);
+        g_free(title);
+        g_free(src_path);
+        return FALSE;
+    }
+
+    gchar *base_name = (tr->track_nr > 0)
+        ? g_strdup_printf("%02d - %s", (int)tr->track_nr, title)
+        : g_strdup(title);
+
+    gchar *file_name = g_strdup_printf("%s%s", base_name, ext);
+    gchar *dst_path = g_build_filename(album_dir, file_name, NULL);
+    int suffix = 2;
+    while (g_file_test(dst_path, G_FILE_TEST_EXISTS)) {
+        g_free(file_name);
+        g_free(dst_path);
+        file_name = g_strdup_printf("%s (%d)%s", base_name, suffix++, ext);
+        dst_path = g_build_filename(album_dir, file_name, NULL);
+    }
+
+    gboolean ok = copy_file_buffered(src_path, dst_path, out_err);
+
+    g_free(file_name);
+    g_free(dst_path);
+    g_free(base_name);
+    g_free(album_dir);
+    g_free(artist);
+    g_free(album);
+    g_free(title);
+    g_free(src_path);
+    return ok;
+}
+
+int32_t poddrop_gpod_export_tracks(
+    const char *mount_path,
+    const uint32_t *track_ids,
+    uint32_t track_count,
+    const char *dest_dir,
+    uint32_t *out_exported_count,
+    char **out_err
+) {
+    if (!mount_path || !dest_dir || dest_dir[0] == '\0') {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+
+    GError *err = NULL;
+    Itdb_iTunesDB *itdb = itdb_parse(mount_path, &err);
+    if (!itdb) {
+        if (out_err) {
+            *out_err = g_strdup(err ? err->message : "Failed to parse iTunesDB");
+        }
+        if (err) g_error_free(err);
+        return -1;
+    }
+
+    uint32_t exported = 0;
+    if (track_ids && track_count > 0) {
+        for (uint32_t i = 0; i < track_count; i++) {
+            Itdb_Track *tr = itdb_track_by_id(itdb, track_ids[i]);
+            if (tr && export_single_track(tr, dest_dir, out_err)) {
+                exported++;
+            } else if (out_err && *out_err) {
+                itdb_free(itdb);
+                return -1;
+            }
+        }
+    } else {
+        for (GList *l = itdb->tracks; l != NULL; l = l->next) {
+            Itdb_Track *tr = (Itdb_Track *)l->data;
+            if (tr && export_single_track(tr, dest_dir, out_err)) {
+                exported++;
+            } else if (out_err && *out_err) {
+                itdb_free(itdb);
+                return -1;
+            }
+        }
+    }
+
+    if (out_exported_count) {
+        *out_exported_count = exported;
+    }
     itdb_free(itdb);
     return 0;
 }

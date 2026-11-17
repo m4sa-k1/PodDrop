@@ -102,3 +102,55 @@ void MainWindow::restoreFromBackup() {
         );
     }).detach();
 }
+
+void MainWindow::exportSelectedTracks() {
+    if (!m_hasDevice || m_busy || m_tracks.isEmpty() || m_mountPath.isEmpty()) return;
+
+    const QString destDir = QFileDialog::getExistingDirectory(
+        this,
+        trText(m_lang, "dlg.export_title")
+    );
+    if (destDir.isEmpty()) return;
+
+    QVector<uint32_t> ids;
+    const auto sel = selectedTracks();
+    for (const auto &t : sel) {
+        ids.push_back(static_cast<uint32_t>(t.id));
+    }
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    const QByteArray destB = destDir.toUtf8();
+
+    std::thread([this, mp, ids, destB]() {
+        uint32_t exported = 0;
+        char *err = nullptr;
+        const int32_t rc = poddrop_export_tracks(
+            mp.constData(),
+            ids.isEmpty() ? nullptr : ids.constData(),
+            static_cast<size_t>(ids.size()),
+            destB.constData(),
+            &exported,
+            &err
+        );
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, exported, errMsg]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                m_statusMsg = (rc == 0)
+                    ? trText(m_lang, "lbl.export_done").arg(exported)
+                    : errMsg;
+                applyTranslations();
+                updateActionStates();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}

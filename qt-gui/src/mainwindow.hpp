@@ -46,10 +46,13 @@ public:
     explicit MainWindow(QWidget *parent = nullptr);
 
 protected:
+    void closeEvent(QCloseEvent *event) override;
     void dragEnterEvent(QDragEnterEvent *event) override;
     void dropEvent(QDropEvent *event) override;
 
 private:
+    void loadSettings();
+    void saveSettings() const;
     void setupUi();
     void applyPalette();
     void applyTranslations();
@@ -62,6 +65,7 @@ private:
 
     void openMountFolder();
     void ejectDevice();
+    void exportSelectedTracks();
     void restoreFromBackup();
     void addMusicFiles();
     void createAlbum(const QString &initialAlbum = QString(), const QString &initialArtist = QString());
@@ -84,6 +88,7 @@ private:
     void handleDroppedFolder(const QString &folderPath);
 
     std::optional<TrackItem> selectedTrack() const;
+    QVector<TrackItem> selectedTracks() const;
     std::optional<PlaylistItem> selectedPlaylist() const;
 
     UiLang m_lang;
@@ -106,6 +111,7 @@ private:
     QMenu *m_helpMenu = nullptr;
     QAction *m_actOpen = nullptr;
     QAction *m_actRefresh = nullptr;
+    QAction *m_actExport = nullptr;
     QAction *m_actRestoreBackup = nullptr;
     QAction *m_actEject = nullptr;
     QAction *m_actExit = nullptr;
@@ -156,6 +162,7 @@ private:
     // Right pane
     QGroupBox *m_libraryGroup = nullptr;
     QLineEdit *m_searchEdit = nullptr;
+    QComboBox *m_libraryFilterCombo = nullptr;
     QPushButton *m_editBtn = nullptr;
     QPushButton *m_removeBtn = nullptr;
     QTableWidget *m_trackTable = nullptr;

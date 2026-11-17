@@ -852,6 +852,135 @@ pub unsafe extern "C" fn poddrop_remove_playlist(
 }
 
 #[no_mangle]
+pub unsafe extern "C" fn poddrop_export_tracks(
+    mount_path: *const c_char,
+    track_ids: *const u32,
+    track_count: usize,
+    dest_dir: *const c_char,
+    out_exported_count: *mut u32,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let Some(dest) = (unsafe { cstr_to_opt(dest_dir) }) else {
+        set_err(out_err, "Null or empty dest_dir");
+        return -1;
+    };
+    let ids: &[u32] = if track_ids.is_null() || track_count == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(track_ids, track_count) }
+    };
+
+    match LibgpodBackend::new().export_tracks(Path::new(&mp), ids, Path::new(&dest)) {
+        Ok(exported) => {
+            if !out_exported_count.is_null() {
+                unsafe { *out_exported_count = exported };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_check_duplicates(
+    mount_path: *const c_char,
+    file_paths: *const *const c_char,
+    file_count: usize,
+    album_override: *const c_char,
+    artist_override: *const c_char,
+    out_duplicates_text: *mut *mut c_char,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    if !out_duplicates_text.is_null() {
+        unsafe { *out_duplicates_text = ptr::null_mut() };
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    if file_paths.is_null() || file_count == 0 {
+        return 0;
+    }
+
+    let existing = match LibgpodBackend::new().list_tracks(Path::new(&mp)) {
+        Ok(tracks) => tracks,
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            return -1;
+        }
+    };
+
+    let ov_album = unsafe { cstr_to_opt(album_override) };
+    let ov_artist = unsafe { cstr_to_opt(artist_override) };
+    let paths_slice = unsafe { std::slice::from_raw_parts(file_paths, file_count) };
+    let mut dup_lines: Vec<String> = Vec::new();
+
+    for &p_ptr in paths_slice {
+        let Some(path_str) = (unsafe { cstr_to_opt(p_ptr) }) else {
+            continue;
+        };
+        let path = Path::new(&path_str);
+        let fallback_title = path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or("")
+            .to_string();
+
+        let (title, artist, album) = match poddrop_core::media::probe_audio(path) {
+            Ok(info) => (
+                if info.title.is_empty() {
+                    fallback_title
+                } else {
+                    info.title
+                },
+                ov_artist.clone().unwrap_or(info.artist),
+                ov_album.clone().unwrap_or(info.album),
+            ),
+            Err(_) => (
+                fallback_title,
+                ov_artist.clone().unwrap_or_default(),
+                ov_album.clone().unwrap_or_default(),
+            ),
+        };
+
+        let t_low = title.trim().to_lowercase();
+        let a_low = artist.trim().to_lowercase();
+        let alb_low = album.trim().to_lowercase();
+        if t_low.is_empty() {
+            continue;
+        }
+
+        let is_dup = existing.iter().any(|ex| {
+            ex.title.trim().to_lowercase() == t_low
+                && (a_low.is_empty() || ex.artist.trim().to_lowercase() == a_low)
+                && (alb_low.is_empty() || ex.album.trim().to_lowercase() == alb_low)
+        });
+        if is_dup {
+            let label = if artist.is_empty() {
+                title
+            } else {
+                format!("{title} — {artist}")
+            };
+            dup_lines.push(label);
+        }
+    }
+
+    if !dup_lines.is_empty() && !out_duplicates_text.is_null() {
+        unsafe { *out_duplicates_text = to_c_char(&dup_lines.join("\n")) };
+    }
+    0
+}
+
+#[no_mangle]
 pub unsafe extern "C" fn poddrop_free_string(s: *mut c_char) {
     if !s.is_null() {
         drop(unsafe { CString::from_raw(s) });

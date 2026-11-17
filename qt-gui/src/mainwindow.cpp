@@ -5,6 +5,7 @@
 #include <QActionGroup>
 #include <QApplication>
 #include <QCheckBox>
+#include <QCloseEvent>
 #include <QComboBox>
 #include <QDir>
 #include <QDragEnterEvent>
@@ -14,6 +15,7 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
@@ -24,6 +26,7 @@
 #include <QPalette>
 #include <QProgressBar>
 #include <QPushButton>
+#include <QSettings>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QStyle>
@@ -45,6 +48,7 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle(QString("PodDrop v%1").arg(QString::fromUtf8(poddrop_app_version())));
 
     setupUi();
+    loadSettings();
     applyPalette();
     applyTranslations();
 
@@ -54,6 +58,49 @@ MainWindow::MainWindow(QWidget *parent)
     reloadDevice();
 }
 
+void MainWindow::closeEvent(QCloseEvent *event) {
+    saveSettings();
+    QMainWindow::closeEvent(event);
+}
+
+void MainWindow::loadSettings() {
+    QSettings s(QStringLiteral("PodDrop"), QStringLiteral("PodDrop"));
+    const QByteArray geom = s.value(QStringLiteral("window/geometry")).toByteArray();
+    if (!geom.isEmpty()) {
+        restoreGeometry(geom);
+    }
+
+    const QString langVal = s.value(QStringLiteral("ui/lang")).toString();
+    if (langVal == QLatin1String("ja")) {
+        m_lang = UiLang::Ja;
+    } else if (langVal == QLatin1String("en")) {
+        m_lang = UiLang::En;
+    }
+    m_actLangEn->setChecked(m_lang == UiLang::En);
+    m_actLangJa->setChecked(m_lang == UiLang::Ja);
+
+    m_darkTheme = s.value(QStringLiteral("ui/darkTheme"), false).toBool();
+    m_actThemeLight->setChecked(!m_darkTheme);
+    m_actThemeDark->setChecked(m_darkTheme);
+
+    const int fmt = s.value(QStringLiteral("transfer/format"), 0).toInt();
+    if (fmt >= 0 && fmt < m_formatCombo->count()) {
+        m_formatCombo->setCurrentIndex(fmt);
+    }
+
+    const bool hideSingles = s.value(QStringLiteral("ui/hideSingles"), false).toBool();
+    m_hideSinglesChk->setChecked(hideSingles);
+}
+
+void MainWindow::saveSettings() const {
+    QSettings s(QStringLiteral("PodDrop"), QStringLiteral("PodDrop"));
+    s.setValue(QStringLiteral("window/geometry"), saveGeometry());
+    s.setValue(QStringLiteral("ui/lang"), m_lang == UiLang::Ja ? QStringLiteral("ja") : QStringLiteral("en"));
+    s.setValue(QStringLiteral("ui/darkTheme"), m_darkTheme);
+    s.setValue(QStringLiteral("transfer/format"), m_formatCombo->currentIndex());
+    s.setValue(QStringLiteral("ui/hideSingles"), m_hideSinglesChk->isChecked());
+}
+
 void MainWindow::setupUi() {
     auto *st = style();
 
@@ -61,6 +108,7 @@ void MainWindow::setupUi() {
     m_fileMenu = menuBar()->addMenu(QString());
     m_actOpen = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DirOpenIcon), QString());
     m_actRefresh = m_fileMenu->addAction(st->standardIcon(QStyle::SP_BrowserReload), QString());
+    m_actExport = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DialogSaveButton), QString());
     m_actRestoreBackup = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DialogResetButton), QString());
     m_actEject = m_fileMenu->addAction(
         QIcon::fromTheme("media-eject", st->standardIcon(QStyle::SP_DriveHDIcon)),
@@ -223,17 +271,20 @@ void MainWindow::setupUi() {
 
     m_searchEdit = new QLineEdit(m_libraryGroup);
     m_searchEdit->setClearButtonEnabled(true);
+    m_libraryFilterCombo = new QComboBox(m_libraryGroup);
+    m_libraryFilterCombo->addItems({QString(), QString(), QString()});
     m_editBtn = new QPushButton(m_libraryGroup);
     m_removeBtn = new QPushButton(m_libraryGroup);
 
     auto *filterRow = new QHBoxLayout();
     filterRow->addWidget(m_searchEdit, 1);
+    filterRow->addWidget(m_libraryFilterCombo);
     filterRow->addWidget(m_editBtn);
     filterRow->addWidget(m_removeBtn);
 
     m_trackTable = new QTableWidget(0, 8, m_libraryGroup);
     m_trackTable->setSelectionBehavior(QAbstractItemView::SelectRows);
-    m_trackTable->setSelectionMode(QAbstractItemView::SingleSelection);
+    m_trackTable->setSelectionMode(QAbstractItemView::ExtendedSelection);
     m_trackTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_trackTable->setAlternatingRowColors(true);
     m_trackTable->setSortingEnabled(true);
@@ -280,6 +331,7 @@ void MainWindow::setupUi() {
         reloadDevice();
     });
     connect(m_actEject, &QAction::triggered, this, &MainWindow::ejectDevice);
+    connect(m_actExport, &QAction::triggered, this, &MainWindow::exportSelectedTracks);
     connect(m_actRestoreBackup, &QAction::triggered, this, &MainWindow::restoreFromBackup);
     connect(m_actExit, &QAction::triggered, this, &QWidget::close);
     connect(m_actAddMusic, &QAction::triggered, this, &MainWindow::addMusicFiles);
@@ -290,15 +342,21 @@ void MainWindow::setupUi() {
     connect(m_actEditPlaylist, &QAction::triggered, this, &MainWindow::editSelectedPlaylist);
     connect(m_actRemovePlaylist, &QAction::triggered, this, &MainWindow::removeSelectedPlaylist);
     connect(m_actAddToPlaylist, &QAction::triggered, this, [this]() {
-        if (const auto trk = selectedTrack(); trk.has_value()) {
-            addTracksToPlaylistPrompt({static_cast<uint32_t>(trk->id)});
+        const auto tracks = selectedTracks();
+        if (tracks.isEmpty()) return;
+        QVector<uint32_t> ids;
+        ids.reserve(tracks.size());
+        for (const auto &t : tracks) {
+            ids.push_back(static_cast<uint32_t>(t.id));
         }
+        addTracksToPlaylistPrompt(ids);
     });
     connect(m_actEditTrack, &QAction::triggered, this, &MainWindow::editSelectedTrack);
     connect(m_actRemoveTrack, &QAction::triggered, this, &MainWindow::removeSelectedTrack);
 
     connect(m_actLangEn, &QAction::triggered, this, [this]() {
         m_lang = UiLang::En;
+        saveSettings();
         applyTranslations();
         populateAlbums();
         populatePlaylists();
@@ -306,6 +364,7 @@ void MainWindow::setupUi() {
     });
     connect(m_actLangJa, &QAction::triggered, this, [this]() {
         m_lang = UiLang::Ja;
+        saveSettings();
         applyTranslations();
         populateAlbums();
         populatePlaylists();
@@ -313,10 +372,12 @@ void MainWindow::setupUi() {
     });
     connect(m_actThemeLight, &QAction::triggered, this, [this]() {
         m_darkTheme = false;
+        saveSettings();
         applyPalette();
     });
     connect(m_actThemeDark, &QAction::triggered, this, [this]() {
         m_darkTheme = true;
+        saveSettings();
         applyPalette();
     });
     connect(m_actSysInfo, &QAction::triggered, this, [this]() {
@@ -339,10 +400,15 @@ void MainWindow::setupUi() {
         populateTracks();
     });
     connect(m_hideSinglesChk, &QCheckBox::toggled, this, [this](bool) {
+        saveSettings();
         populateAlbums();
         populateTracks();
     });
+    connect(m_formatCombo, &QComboBox::currentIndexChanged, this, [this](int) {
+        saveSettings();
+    });
     connect(m_searchEdit, &QLineEdit::textChanged, this, [this]() { populateTracks(); });
+    connect(m_libraryFilterCombo, &QComboBox::currentIndexChanged, this, [this](int) { populateTracks(); });
     connect(m_albumList, &QListWidget::currentRowChanged, this, [this](int row) {
         if (row <= 0) {
             m_selectedAlbum.clear();
@@ -409,10 +475,13 @@ void MainWindow::setupUi() {
         editSelectedTrack();
     });
     connect(m_trackTable, &QTableWidget::customContextMenuRequested, this, [this](const QPoint &pos) {
-        if (!selectedTrack().has_value()) return;
+        if (selectedTracks().isEmpty()) return;
         QMenu menu(this);
-        menu.addAction(m_actEditTrack);
+        if (selectedTracks().size() == 1) {
+            menu.addAction(m_actEditTrack);
+        }
         menu.addAction(m_actAddToPlaylist);
+        menu.addAction(m_actExport);
         menu.addAction(m_actRemoveTrack);
         menu.exec(m_trackTable->viewport()->mapToGlobal(pos));
     });
@@ -458,6 +527,7 @@ void MainWindow::applyTranslations() {
 
     m_actOpen->setText(trText(m_lang, "act.open"));
     m_actRefresh->setText(trText(m_lang, "act.refresh"));
+    m_actExport->setText(trText(m_lang, "act.export_tracks"));
     m_actRestoreBackup->setText(trText(m_lang, "act.restore_backup"));
     m_actEject->setText(trText(m_lang, "act.eject"));
     m_actExit->setText(trText(m_lang, "act.exit"));
@@ -493,6 +563,9 @@ void MainWindow::applyTranslations() {
     m_removePlaylistBtn->setText(trText(m_lang, "act.remove_playlist"));
 
     m_searchEdit->setPlaceholderText(trText(m_lang, "lbl.search_hint"));
+    m_libraryFilterCombo->setItemText(0, trText(m_lang, "flt.all"));
+    m_libraryFilterCombo->setItemText(1, trText(m_lang, "flt.missing_tags"));
+    m_libraryFilterCombo->setItemText(2, trText(m_lang, "flt.duplicates"));
     m_editBtn->setText(trText(m_lang, "act.edit_track"));
     m_removeBtn->setText(trText(m_lang, "act.remove_track"));
 
@@ -786,8 +859,25 @@ void MainWindow::populateTracks() {
         }
     }
 
+    const int filterMode = m_libraryFilterCombo ? m_libraryFilterCombo->currentIndex() : 0;
+    std::map<std::pair<QString, QString>, int> dupCounts;
+    if (filterMode == 2) {
+        for (const auto &t : m_tracks) {
+            dupCounts[{t.title.trimmed().toLower(), t.artist.trimmed().toLower()}]++;
+        }
+    }
+
     for (const TrackItem *tp : displayTracks) {
         const TrackItem &t = *tp;
+        if (filterMode == 1) {
+            if (!t.artist.trimmed().isEmpty() && !t.album.trimmed().isEmpty()) {
+                continue;
+            }
+        } else if (filterMode == 2) {
+            if (dupCounts[{t.title.trimmed().toLower(), t.artist.trimmed().toLower()}] < 2) {
+                continue;
+            }
+        }
         if (!query.isEmpty()) {
             const bool matched = t.title.toLower().contains(query) ||
                                  t.artist.toLower().contains(query) ||
@@ -879,7 +969,8 @@ void MainWindow::updateCoverPreview() {
 
 void MainWindow::updateActionStates() {
     const bool canWrite = m_hasDevice && !m_device.isReadOnly && !m_busy;
-    const bool hasSel = selectedTrack().has_value();
+    const int selCount = selectedTracks().size();
+    const bool hasSel = selCount > 0;
     const bool hasAlbumSel = !m_selectedAlbum.isEmpty();
     const auto plOpt = selectedPlaylist();
     const bool hasPlSel = plOpt.has_value();
@@ -887,6 +978,7 @@ void MainWindow::updateActionStates() {
 
     m_actOpen->setEnabled(!m_busy);
     m_actRefresh->setEnabled(!m_busy);
+    m_actExport->setEnabled(m_hasDevice && !m_tracks.isEmpty() && !m_busy);
     m_actRestoreBackup->setEnabled(canWrite);
     m_actEject->setEnabled(m_hasDevice && !m_busy);
     m_formatCombo->setEnabled(!m_busy);
@@ -904,8 +996,8 @@ void MainWindow::updateActionStates() {
     m_actRemovePlaylist->setEnabled(canWrite && hasPlSel);
     m_removePlaylistBtn->setEnabled(canWrite && hasPlSel);
     m_actAddToPlaylist->setEnabled(canWrite && hasSel);
-    m_actEditTrack->setEnabled(m_hasDevice && hasSel && !m_busy);
-    m_editBtn->setEnabled(m_hasDevice && hasSel && !m_busy);
+    m_actEditTrack->setEnabled(m_hasDevice && selCount == 1 && !m_busy);
+    m_editBtn->setEnabled(m_hasDevice && selCount == 1 && !m_busy);
     m_actRemoveTrack->setEnabled(canWrite && hasSel);
     m_removeBtn->setEnabled(canWrite && hasSel);
 }
@@ -928,4 +1020,29 @@ std::optional<TrackItem> MainWindow::selectedTrack() const {
         if (t.id == tid) return t;
     }
     return std::nullopt;
+}
+
+QVector<TrackItem> MainWindow::selectedTracks() const {
+    QVector<TrackItem> result;
+    if (!m_trackTable->selectionModel()) return result;
+    const auto rows = m_trackTable->selectionModel()->selectedRows();
+    std::unordered_map<uint64_t, const TrackItem *> byId;
+    byId.reserve(static_cast<size_t>(m_tracks.size()));
+    for (const auto &t : m_tracks) {
+        byId[t.id] = &t;
+    }
+    for (const QModelIndex &idx : rows) {
+        const auto *item = m_trackTable->item(idx.row(), 0);
+        if (!item) continue;
+        const uint64_t tid = item->data(Qt::UserRole).toULongLong();
+        if (auto it = byId.find(tid); it != byId.end()) {
+            result.push_back(*it->second);
+        }
+    }
+    if (result.isEmpty()) {
+        if (const auto single = selectedTrack(); single.has_value()) {
+            result.push_back(*single);
+        }
+    }
+    return result;
 }

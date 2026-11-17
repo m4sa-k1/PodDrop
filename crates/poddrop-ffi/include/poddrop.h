@@ -184,6 +184,23 @@ int32_t poddrop_add_tracks_to_playlist(
     char **out_err
 );
 int32_t poddrop_remove_playlist(const char *mount_path, uint64_t playlist_id, char **out_err);
+int32_t poddrop_export_tracks(
+    const char *mount_path,
+    const uint32_t *track_ids,
+    size_t track_count,
+    const char *dest_dir,
+    uint32_t *out_exported_count,
+    char **out_err
+);
+int32_t poddrop_check_duplicates(
+    const char *mount_path,
+    const char *const *file_paths,
+    size_t file_count,
+    const char *album_override,
+    const char *artist_override,
+    char **out_duplicates_text,
+    char **out_err
+);
 
 #ifdef __cplusplus
 }
