@@ -97,9 +97,12 @@ struct UiRefs {
     device_meta_label: gtk4::Label,
     storage_label: gtk4::Label,
     storage_bar: gtk4::ProgressBar,
-    stat_tracks_label: gtk4::Label,
-    stat_albums_label: gtk4::Label,
-    stat_playlists_label: gtk4::Label,
+    stat_tracks_val: gtk4::Label,
+    stat_tracks_lbl: gtk4::Label,
+    stat_albums_val: gtk4::Label,
+    stat_albums_lbl: gtk4::Label,
+    stat_playlists_val: gtk4::Label,
+    stat_playlists_lbl: gtk4::Label,
     dash_add_btn: gtk4::Button,
     dash_album_btn: gtk4::Button,
     format_dropdown: gtk4::DropDown,
@@ -175,38 +178,41 @@ pub fn build_main_window(app: &adw::Application) {
 
     let device_box = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
-        .spacing(6)
-        .margin_top(14)
-        .margin_bottom(14)
-        .margin_start(16)
-        .margin_end(16)
+        .spacing(8)
+        .css_classes(["card-box"])
         .build();
-    device_box.append(&device_heading);
-    device_box.append(&mount_label);
-    device_box.append(&device_meta_label);
-    device_box.append(&storage_label);
-    device_box.append(&storage_bar);
-    let device_frame = gtk4::Frame::builder().child(&device_box).build();
+    let device_inner = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .spacing(6)
+        .margin_top(16)
+        .margin_bottom(16)
+        .margin_start(18)
+        .margin_end(18)
+        .build();
+    device_inner.append(&device_heading);
+    device_inner.append(&mount_label);
+    device_inner.append(&device_meta_label);
+    device_inner.append(&storage_label);
+    device_inner.append(&storage_bar);
+    device_box.append(&device_inner);
 
-    // Stats row
-    let stat_tracks_label = gtk4::Label::builder().css_classes(["title-2"]).build();
-    let stat_albums_label = gtk4::Label::builder().css_classes(["title-2"]).build();
-    let stat_playlists_label = gtk4::Label::builder().css_classes(["title-2"]).build();
+    // Stats row (centered number + label per card)
+    let (stat_tracks_card, stat_tracks_val, stat_tracks_lbl) = make_stat_card();
+    let (stat_albums_card, stat_albums_val, stat_albums_lbl) = make_stat_card();
+    let (stat_playlists_card, stat_playlists_val, stat_playlists_lbl) = make_stat_card();
 
     let stats_row = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Horizontal)
         .spacing(12)
         .homogeneous(true)
         .build();
-    stats_row.append(&gtk4::Frame::builder().child(&stat_tracks_label).build());
-    stats_row.append(&gtk4::Frame::builder().child(&stat_albums_label).build());
-    stats_row.append(&gtk4::Frame::builder().child(&stat_playlists_label).build());
+    stats_row.append(&stat_tracks_card);
+    stats_row.append(&stat_albums_card);
+    stats_row.append(&stat_playlists_card);
 
     // Quick Actions + Drop Zone
-    let dash_add_btn = gtk4::Button::builder()
-        .css_classes(["suggested-action", "pill"])
-        .build();
-    let dash_album_btn = gtk4::Button::builder().css_classes(["pill"]).build();
+    let dash_add_btn = gtk4::Button::builder().css_classes(["primary-btn"]).build();
+    let dash_album_btn = gtk4::Button::new();
     let format_items = gtk4::StringList::new(&["AAC (.m4a)", "ALAC (.m4a)", "MP3"]);
     let format_dropdown = gtk4::DropDown::new(Some(format_items), gtk4::Expression::NONE);
 
@@ -221,32 +227,41 @@ pub fn build_main_window(app: &adw::Application) {
 
     let drop_hint_label = gtk4::Label::builder()
         .halign(gtk4::Align::Center)
-        .css_classes(["dim-label"])
+        .css_classes(["muted-text"])
         .build();
 
     let drop_box = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
-        .spacing(12)
-        .margin_top(24)
-        .margin_bottom(24)
-        .margin_start(16)
-        .margin_end(16)
-        .build();
-    drop_box.append(&quick_actions);
-    drop_box.append(&drop_hint_label);
-    let drop_frame = gtk4::Frame::builder().child(&drop_box).build();
-
-    let dashboard_box = gtk4::Box::builder()
-        .orientation(gtk4::Orientation::Vertical)
         .spacing(14)
-        .margin_top(16)
-        .margin_bottom(16)
+        .css_classes(["drop-zone"])
+        .build();
+    let drop_inner = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .spacing(12)
+        .margin_top(26)
+        .margin_bottom(26)
         .margin_start(18)
         .margin_end(18)
         .build();
-    dashboard_box.append(&device_frame);
+    drop_inner.append(&quick_actions);
+    drop_inner.append(&drop_hint_label);
+    drop_box.append(&drop_inner);
+
+    let dashboard_box = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .spacing(16)
+        .margin_top(20)
+        .margin_bottom(20)
+        .margin_start(18)
+        .margin_end(18)
+        .build();
+    dashboard_box.append(&device_box);
     dashboard_box.append(&stats_row);
-    dashboard_box.append(&drop_frame);
+    dashboard_box.append(&drop_box);
+    let dashboard_clamp = adw::Clamp::builder()
+        .maximum_size(820)
+        .child(&dashboard_box)
+        .build();
 
     // --- Tab 2: Albums ---
     let albums_header_label = gtk4::Label::builder()
@@ -254,9 +269,7 @@ pub fn build_main_window(app: &adw::Application) {
         .hexpand(true)
         .css_classes(["heading"])
         .build();
-    let create_album_btn = gtk4::Button::builder()
-        .css_classes(["suggested-action"])
-        .build();
+    let create_album_btn = gtk4::Button::builder().css_classes(["primary-btn"]).build();
     let albums_top = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Horizontal)
         .spacing(8)
@@ -270,18 +283,23 @@ pub fn build_main_window(app: &adw::Application) {
         .build();
     let albums_scroll = gtk4::ScrolledWindow::builder()
         .vexpand(true)
+        .kinetic_scrolling(false)
         .child(&album_list)
         .build();
     let albums_box = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
-        .spacing(10)
-        .margin_top(16)
-        .margin_bottom(16)
+        .spacing(12)
+        .margin_top(20)
+        .margin_bottom(20)
         .margin_start(18)
         .margin_end(18)
         .build();
     albums_box.append(&albums_top);
     albums_box.append(&albums_scroll);
+    let albums_clamp = adw::Clamp::builder()
+        .maximum_size(820)
+        .child(&albums_box)
+        .build();
 
     // --- Tab 3: All Tracks ---
     let tracks_header_label = gtk4::Label::builder()
@@ -302,33 +320,38 @@ pub fn build_main_window(app: &adw::Application) {
         .build();
     let tracks_scroll = gtk4::ScrolledWindow::builder()
         .vexpand(true)
+        .kinetic_scrolling(false)
         .child(&track_list)
         .build();
     let tracks_box = gtk4::Box::builder()
         .orientation(gtk4::Orientation::Vertical)
-        .spacing(10)
-        .margin_top(16)
-        .margin_bottom(16)
+        .spacing(12)
+        .margin_top(20)
+        .margin_bottom(20)
         .margin_start(18)
         .margin_end(18)
         .build();
     tracks_box.append(&tracks_top);
     tracks_box.append(&tracks_scroll);
+    let tracks_clamp = adw::Clamp::builder()
+        .maximum_size(820)
+        .child(&tracks_box)
+        .build();
 
     let dashboard_page = view_stack.add_titled_with_icon(
-        &dashboard_box,
+        &dashboard_clamp,
         Some("dashboard"),
         "Dashboard",
         "go-home-symbolic",
     );
     let albums_page = view_stack.add_titled_with_icon(
-        &albums_box,
+        &albums_clamp,
         Some("albums"),
         "Albums",
         "media-optical-symbolic",
     );
     let tracks_page = view_stack.add_titled_with_icon(
-        &tracks_box,
+        &tracks_clamp,
         Some("tracks"),
         "Tracks",
         "audio-x-generic-symbolic",
@@ -371,9 +394,12 @@ pub fn build_main_window(app: &adw::Application) {
         device_meta_label,
         storage_label,
         storage_bar,
-        stat_tracks_label,
-        stat_albums_label,
-        stat_playlists_label,
+        stat_tracks_val,
+        stat_tracks_lbl,
+        stat_albums_val,
+        stat_albums_lbl,
+        stat_playlists_val,
+        stat_playlists_lbl,
         dash_add_btn: dash_add_btn.clone(),
         dash_album_btn: dash_album_btn.clone(),
         format_dropdown: format_dropdown.clone(),
@@ -678,21 +704,13 @@ fn refresh_ui(state: &Rc<RefCell<AppState>>, ui: &UiRefs) {
                 ui.storage_bar.set_fraction(0.0);
             }
 
-            ui.stat_tracks_label.set_label(&format!(
-                "{}\n{}",
-                info.track_count,
-                tr.t("inspect.tracks")
-            ));
-            ui.stat_albums_label.set_label(&format!(
-                "{}\n{}",
-                albums.len(),
-                tr.t("gui.albums_count")
-            ));
-            ui.stat_playlists_label.set_label(&format!(
-                "{}\n{}",
-                info.playlist_count,
-                tr.t("inspect.playlists")
-            ));
+            ui.stat_tracks_val.set_label(&info.track_count.to_string());
+            ui.stat_tracks_lbl.set_label(tr.t("inspect.tracks"));
+            ui.stat_albums_val.set_label(&albums.len().to_string());
+            ui.stat_albums_lbl.set_label(tr.t("gui.albums_count"));
+            ui.stat_playlists_val
+                .set_label(&info.playlist_count.to_string());
+            ui.stat_playlists_lbl.set_label(tr.t("inspect.playlists"));
 
             !info.is_read_only && !st.is_busy
         }
@@ -703,12 +721,12 @@ fn refresh_ui(state: &Rc<RefCell<AppState>>, ui: &UiRefs) {
             ui.device_meta_label.set_label("");
             ui.storage_label.set_label("");
             ui.storage_bar.set_fraction(0.0);
-            ui.stat_tracks_label
-                .set_label(&format!("0\n{}", tr.t("inspect.tracks")));
-            ui.stat_albums_label
-                .set_label(&format!("0\n{}", tr.t("gui.albums_count")));
-            ui.stat_playlists_label
-                .set_label(&format!("0\n{}", tr.t("inspect.playlists")));
+            ui.stat_tracks_val.set_label("0");
+            ui.stat_tracks_lbl.set_label(tr.t("inspect.tracks"));
+            ui.stat_albums_val.set_label("0");
+            ui.stat_albums_lbl.set_label(tr.t("gui.albums_count"));
+            ui.stat_playlists_val.set_label("0");
+            ui.stat_playlists_lbl.set_label(tr.t("inspect.playlists"));
             false
         }
     };
@@ -1018,4 +1036,36 @@ fn poll_worker(rx: mpsc::Receiver<WorkerEvent>, state: &Rc<RefCell<AppState>>, u
             glib::ControlFlow::Break
         }
     });
+}
+
+fn make_stat_card() -> (gtk4::Box, gtk4::Label, gtk4::Label) {
+    let val = gtk4::Label::builder()
+        .halign(gtk4::Align::Center)
+        .justify(gtk4::Justification::Center)
+        .css_classes(["stat-value"])
+        .build();
+    let lbl = gtk4::Label::builder()
+        .halign(gtk4::Align::Center)
+        .justify(gtk4::Justification::Center)
+        .css_classes(["stat-label"])
+        .build();
+    let inner = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .spacing(4)
+        .halign(gtk4::Align::Center)
+        .valign(gtk4::Align::Center)
+        .margin_top(14)
+        .margin_bottom(14)
+        .margin_start(12)
+        .margin_end(12)
+        .build();
+    inner.append(&val);
+    inner.append(&lbl);
+
+    let card = gtk4::Box::builder()
+        .orientation(gtk4::Orientation::Vertical)
+        .css_classes(["card-box"])
+        .build();
+    card.append(&inner);
+    (card, val, lbl)
 }

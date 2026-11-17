@@ -1,0 +1,120 @@
+/* Clean monochrome (black & white) theme and removal of scroll overshoot artifacts */
+
+window,
+.background {
+    background-color: #111111;
+    color: #f2f2f2;
+}
+
+headerbar {
+    background-color: #161616;
+    color: #f2f2f2;
+    border-bottom: 1px solid #262626;
+    box-shadow: none;
+}
+
+.card-box {
+    background-color: #1a1a1a;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+}
+
+.drop-zone {
+    background-color: #161616;
+    border: 1px dashed #3a3a3a;
+    border-radius: 10px;
+}
+
+.stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #ffffff;
+}
+
+.stat-label {
+    font-size: 12px;
+    color: #9e9e9e;
+}
+
+.muted-text {
+    color: #9e9e9e;
+}
+
+button {
+    background-color: #242424;
+    color: #f2f2f2;
+    border: 1px solid #383838;
+    border-radius: 7px;
+    box-shadow: none;
+}
+
+button:hover {
+    background-color: #2f2f2f;
+}
+
+button.primary-btn {
+    background-color: #f2f2f2;
+    color: #111111;
+    border: 1px solid #f2f2f2;
+    font-weight: 600;
+}
+
+button.primary-btn:hover {
+    background-color: #dcdcdc;
+}
+
+button.flat {
+    background-color: transparent;
+    border-color: transparent;
+}
+
+button.flat:hover {
+    background-color: #2a2a2a;
+}
+
+progressbar trough {
+    background-color: #262626;
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+progressbar progress {
+    background-color: #e6e6e6;
+    border-radius: 4px;
+    min-height: 6px;
+}
+
+list.boxed-list {
+    background-color: #1a1a1a;
+    border: 1px solid #2c2c2c;
+    border-radius: 10px;
+}
+
+list.boxed-list > row {
+    border-bottom: 1px solid #242424;
+}
+
+list.boxed-list > row:last-child {
+    border-bottom: none;
+}
+
+/* Remove white overscroll / undershoot glow on ScrolledWindow */
+undershoot.top,
+undershoot.bottom,
+undershoot.left,
+undershoot.right,
+overshoot.top,
+overshoot.bottom,
+overshoot.left,
+overshoot.right {
+    background: none;
+    background-image: none;
+    box-shadow: none;
+    border: none;
+}
+
+banner {
+    background-color: #222222;
+    color: #e6e6e6;
+    border-bottom: 1px solid #383838;
+}

@@ -34,7 +34,7 @@ pub fn show_create_album_dialog(
     let header = adw::HeaderBar::new();
     let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
     let submit_btn = gtk4::Button::with_label(tr.t("gui.select_files"));
-    submit_btn.add_css_class("suggested-action");
+    submit_btn.add_css_class("primary-btn");
     header.pack_start(&cancel_btn);
     header.pack_end(&submit_btn);
 
@@ -204,7 +204,7 @@ pub fn show_track_editor_dialog(
     let header = adw::HeaderBar::new();
     let cancel_btn = gtk4::Button::with_label(tr.t("gui.cancel"));
     let save_btn = gtk4::Button::with_label(tr.t("gui.save"));
-    save_btn.add_css_class("suggested-action");
+    save_btn.add_css_class("primary-btn");
     save_btn.set_sensitive(can_write);
     header.pack_start(&cancel_btn);
     header.pack_end(&save_btn);
@@ -321,6 +321,7 @@ pub fn show_track_editor_dialog(
     let scrolled = gtk4::ScrolledWindow::builder()
         .vexpand(true)
         .min_content_height(420)
+        .kinetic_scrolling(false)
         .child(&content)
         .build();
 
