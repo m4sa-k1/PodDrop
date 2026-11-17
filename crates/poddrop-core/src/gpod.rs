@@ -48,6 +48,29 @@ extern "C" {
     fn poddrop_gpod_free_device_info(info: *mut PodDropGpodDeviceInfo);
     fn poddrop_gpod_free_tracks(tracks: *mut PodDropGpodTrack, count: usize);
     fn poddrop_gpod_free_string(s: *mut c_char);
+    fn poddrop_read_sysinfo_vpd(
+        dev_path: *const c_char,
+        out_xml: *mut *mut c_char,
+        out_err: *mut *mut c_char,
+    ) -> c_int;
+}
+
+/// Reads `SysInfoExtended` plist XML directly from an iPod block device via SCSI VPD (read-only).
+pub fn read_sysinfo_extended_xml(dev_path: &Path) -> Result<String> {
+    let c_dev = path_to_cstring(dev_path)?;
+    let mut xml_ptr: *mut c_char = ptr::null_mut();
+    let mut err_ptr: *mut c_char = ptr::null_mut();
+
+    let rc = unsafe { poddrop_read_sysinfo_vpd(c_dev.as_ptr(), &mut xml_ptr, &mut err_ptr) };
+    if rc != 0 {
+        return Err(PodDropError::Backend(take_c_error(err_ptr)));
+    }
+    if xml_ptr.is_null() {
+        return Err(PodDropError::Backend("Null XML pointer returned".into()));
+    }
+    let xml = unsafe { cstr_to_string(xml_ptr) };
+    unsafe { poddrop_gpod_free_string(xml_ptr) };
+    Ok(xml)
 }
 
 /// Read-only and sync backend powered by `libgpod`.

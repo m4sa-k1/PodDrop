@@ -1,8 +1,13 @@
 #include <gpod/itdb.h>
 #include <glib.h>
+#include <errno.h>
+#include <fcntl.h>
+#include <scsi/sg.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
 
 typedef struct {
     char *model_number;
@@ -145,5 +150,80 @@ int poddrop_gpod_list_tracks(
     *out_tracks = arr;
     *out_count = idx;
     itdb_free(itdb);
+    return 0;
+}
+
+static int scsi_vpd_inquiry(int fd, uint8_t page, uint8_t *buf, size_t buf_len, char **out_err) {
+    uint8_t cdb[6] = {0x12, 0x01, page, 0x00, (uint8_t)(buf_len > 255 ? 255 : buf_len), 0x00};
+    uint8_t sense[32] = {0};
+
+    sg_io_hdr_t io_hdr;
+    memset(&io_hdr, 0, sizeof(io_hdr));
+    io_hdr.interface_id = 'S';
+    io_hdr.dxfer_direction = SG_DXFER_FROM_DEV;
+    io_hdr.cmd_len = sizeof(cdb);
+    io_hdr.mx_sb_len = sizeof(sense);
+    io_hdr.dxfer_len = (unsigned int)(buf_len > 255 ? 255 : buf_len);
+    io_hdr.dxferp = buf;
+    io_hdr.cmdp = cdb;
+    io_hdr.sbp = sense;
+    io_hdr.timeout = 5000;
+
+    if (ioctl(fd, SG_IO, &io_hdr) < 0) {
+        if (out_err) *out_err = g_strdup_printf("SG_IO ioctl failed: %s", g_strerror(errno));
+        return -1;
+    }
+    if ((io_hdr.info & SG_INFO_OK_MASK) != SG_INFO_OK) {
+        if (out_err) *out_err = g_strdup_printf("SCSI INQUIRY failed (status=%u)", io_hdr.status);
+        return -1;
+    }
+    return 0;
+}
+
+int poddrop_read_sysinfo_vpd(const char *dev_path, char **out_xml, char **out_err) {
+    if (!dev_path || !out_xml) {
+        if (out_err) *out_err = g_strdup("Invalid arguments");
+        return -1;
+    }
+    *out_xml = NULL;
+
+    int fd = open(dev_path, O_RDONLY | O_NONBLOCK);
+    if (fd < 0) {
+        if (out_err) *out_err = g_strdup_printf("Failed to open %s: %s", dev_path, g_strerror(errno));
+        return -1;
+    }
+
+    uint8_t page_list[255] = {0};
+    if (scsi_vpd_inquiry(fd, 0xC0, page_list, sizeof(page_list), out_err) != 0) {
+        close(fd);
+        return -1;
+    }
+
+    uint8_t list_len = page_list[3];
+    GString *xml = g_string_new(NULL);
+    for (size_t i = 0; i < list_len && (4 + i) < sizeof(page_list); ++i) {
+        uint8_t page = page_list[4 + i];
+        if (page < 0xC2) continue;
+
+        uint8_t chunk[255] = {0};
+        if (scsi_vpd_inquiry(fd, page, chunk, sizeof(chunk), out_err) != 0) {
+            g_string_free(xml, TRUE);
+            close(fd);
+            return -1;
+        }
+        uint8_t chunk_len = chunk[3];
+        if (chunk_len > 0 && (size_t)(4 + chunk_len) <= sizeof(chunk)) {
+            g_string_append_len(xml, (const gchar *)(chunk + 4), chunk_len);
+        }
+    }
+
+    close(fd);
+    if (xml->len == 0) {
+        g_string_free(xml, TRUE);
+        if (out_err) *out_err = g_strdup("Empty SysInfoExtended VPD response");
+        return -1;
+    }
+
+    *out_xml = g_string_free(xml, FALSE);
     return 0;
 }

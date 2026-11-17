@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::process::ExitCode;
 
 use poddrop_core::backend::IpodBackend;
-use poddrop_core::gpod::LibgpodBackend;
+use poddrop_core::gpod::{read_sysinfo_extended_xml, LibgpodBackend};
 use poddrop_core::i18n::{Language, Translator};
 use poddrop_core::{APP_NAME, APP_VERSION};
 
@@ -49,6 +49,29 @@ fn main() -> ExitCode {
             return ExitCode::FAILURE;
         };
         return run_inspect(&PathBuf::from(path_str), show_tracks, &tr);
+    }
+
+    if positional[0] == "read-sysinfo" {
+        let (Some(dev_str), Some(out_str)) = (positional.get(1), positional.get(2)) else {
+            eprintln!("Usage: poddrop-cli read-sysinfo <block_device> <output_xml_path>");
+            return ExitCode::FAILURE;
+        };
+        return match read_sysinfo_extended_xml(&PathBuf::from(dev_str)) {
+            Ok(xml) => match std::fs::write(out_str, &xml) {
+                Ok(()) => {
+                    println!("Wrote SysInfoExtended ({} bytes) to {out_str}", xml.len());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("Failed to write {out_str}: {e}");
+                    ExitCode::FAILURE
+                }
+            },
+            Err(e) => {
+                eprintln!("Error reading SysInfoExtended: {e}");
+                ExitCode::FAILURE
+            }
+        };
     }
 
     eprintln!("{}", tr.t("cli.usage"));
