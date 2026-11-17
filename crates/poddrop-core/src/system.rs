@@ -1,6 +1,6 @@
 use std::process::Command;
 
-use crate::backup::default_backup_root;
+use crate::backup::{default_backup_root, latest_backup};
 use crate::{APP_NAME, APP_VERSION};
 
 /// Runtime system and dependency diagnostics for PodDrop.
@@ -12,17 +12,23 @@ pub struct SystemDiagnostics {
     pub ffprobe_version: String,
     pub udisksctl_status: String,
     pub backup_dir: String,
+    pub last_backup_time: Option<String>,
+    pub last_backup_size_bytes: u64,
 }
 
 /// Collects current application and external tool status.
 pub fn collect_system_diagnostics() -> SystemDiagnostics {
+    let backup_root = default_backup_root();
+    let latest = latest_backup(&backup_root);
     SystemDiagnostics {
         app_name: APP_NAME.to_string(),
         app_version: APP_VERSION.to_string(),
         ffmpeg_version: tool_first_line("ffmpeg", &["-version"]),
         ffprobe_version: tool_first_line("ffprobe", &["-version"]),
         udisksctl_status: tool_first_line("udisksctl", &["--version"]),
-        backup_dir: default_backup_root().display().to_string(),
+        backup_dir: backup_root.display().to_string(),
+        last_backup_time: latest.as_ref().map(|b| b.created_at.clone()),
+        last_backup_size_bytes: latest.map_or(0, |b| b.size_bytes),
     }
 }
 

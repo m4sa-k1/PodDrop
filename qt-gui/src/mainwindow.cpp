@@ -76,6 +76,7 @@ void MainWindow::setupUi() {
     m_fileMenu = menuBar()->addMenu(QString());
     m_actOpen = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DirOpenIcon), QString());
     m_actRefresh = m_fileMenu->addAction(st->standardIcon(QStyle::SP_BrowserReload), QString());
+    m_actRestoreBackup = m_fileMenu->addAction(st->standardIcon(QStyle::SP_DialogResetButton), QString());
     m_actEject = m_fileMenu->addAction(
         QIcon::fromTheme("media-eject", st->standardIcon(QStyle::SP_DriveHDIcon)),
         QString()
@@ -292,6 +293,7 @@ void MainWindow::setupUi() {
         reloadDevice();
     });
     connect(m_actEject, &QAction::triggered, this, &MainWindow::ejectDevice);
+    connect(m_actRestoreBackup, &QAction::triggered, this, &MainWindow::restoreFromBackup);
     connect(m_actExit, &QAction::triggered, this, &QWidget::close);
     connect(m_actAddMusic, &QAction::triggered, this, &MainWindow::addMusicFiles);
     connect(m_actCreateAlbum, &QAction::triggered, this, [this]() { createAlbum(); });
@@ -465,6 +467,7 @@ void MainWindow::applyTranslations() {
 
     m_actOpen->setText(trText(m_lang, "act.open"));
     m_actRefresh->setText(trText(m_lang, "act.refresh"));
+    m_actRestoreBackup->setText(trText(m_lang, "act.restore_backup"));
     m_actEject->setText(trText(m_lang, "act.eject"));
     m_actExit->setText(trText(m_lang, "act.exit"));
     if (m_closeBtn) {
@@ -631,6 +634,32 @@ void MainWindow::reloadDevice() {
     populatePlaylists();
     populateTracks();
     updateActionStates();
+
+    if (!m_hasDevice) {
+        m_backedUpMountPath.clear();
+    } else if (m_mountPath != m_backedUpMountPath) {
+        m_backedUpMountPath = m_mountPath;
+        const QByteArray mp = m_mountPath.toUtf8();
+        std::thread([this, mp]() {
+            char *bTime = nullptr;
+            char *bErr = nullptr;
+            const int32_t rc = poddrop_create_backup(mp.constData(), &bTime, &bErr);
+            const QString stamp = takeCString(bTime);
+            takeCString(bErr);
+            if (rc == 0 && !stamp.isEmpty()) {
+                QMetaObject::invokeMethod(
+                    this,
+                    [this, stamp]() {
+                        if (m_statusMsg.isEmpty()) {
+                            m_statusMsg = trText(m_lang, "lbl.backup_done").arg(stamp);
+                            applyTranslations();
+                        }
+                    },
+                    Qt::QueuedConnection
+                );
+            }
+        }).detach();
+    }
 }
 
 void MainWindow::populateAlbums() {
@@ -839,6 +868,7 @@ void MainWindow::updateActionStates() {
 
     m_actOpen->setEnabled(!m_busy);
     m_actRefresh->setEnabled(!m_busy);
+    m_actRestoreBackup->setEnabled(canWrite);
     m_actEject->setEnabled(m_hasDevice && !m_busy);
     m_formatCombo->setEnabled(!m_busy);
     m_actAddMusic->setEnabled(canWrite);
@@ -911,11 +941,66 @@ void MainWindow::ejectDevice() {
                 m_busy = false;
                 if (rc == 0) {
                     m_mountPath.clear();
+                    m_backedUpMountPath.clear();
                     m_selectedAlbum.clear();
                     m_statusMsg = trText(m_lang, "lbl.ejected");
                 } else {
                     m_statusMsg = errMsg;
                 }
+                reloadDevice();
+            },
+            Qt::QueuedConnection
+        );
+    }).detach();
+}
+
+void MainWindow::restoreFromBackup() {
+    if (!m_hasDevice || m_device.isReadOnly || m_busy || m_mountPath.isEmpty()) return;
+
+    PodDropSystemInfo info{};
+    poddrop_get_system_info(&info);
+    const QString lastTime = info.last_backup_time ? QString::fromUtf8(info.last_backup_time) : QString();
+    const uint64_t sizeBytes = info.last_backup_size_bytes;
+    poddrop_free_system_info(&info);
+
+    if (lastTime.isEmpty()) {
+        QMessageBox::information(
+            this,
+            trText(m_lang, "act.restore_backup"),
+            trText(m_lang, "sys.no_backup")
+        );
+        return;
+    }
+
+    const double mb = static_cast<double>(sizeBytes) / (1024.0 * 1024.0);
+    const auto reply = QMessageBox::question(
+        this,
+        trText(m_lang, "act.restore_backup"),
+        trText(m_lang, "dlg.restore_confirm").arg(lastTime).arg(mb, 0, 'f', 2)
+    );
+    if (reply != QMessageBox::Yes) return;
+
+    m_busy = true;
+    applyTranslations();
+    updateActionStates();
+    QApplication::setOverrideCursor(Qt::WaitCursor);
+
+    const QByteArray mp = m_mountPath.toUtf8();
+    std::thread([this, mp]() {
+        char *restoredTime = nullptr;
+        char *err = nullptr;
+        const int32_t rc = poddrop_restore_latest_backup(mp.constData(), &restoredTime, &err);
+        const QString ts = takeCString(restoredTime);
+        const QString errMsg = takeCString(err);
+
+        QMetaObject::invokeMethod(
+            this,
+            [this, rc, ts, errMsg]() {
+                QApplication::restoreOverrideCursor();
+                m_busy = false;
+                m_statusMsg = (rc == 0)
+                    ? trText(m_lang, "lbl.restore_done").arg(ts)
+                    : errMsg;
                 reloadDevice();
             },
             Qt::QueuedConnection

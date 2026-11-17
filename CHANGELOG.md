@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- Automatic backup on iPod connection/open with date-time folder naming (`backup_YYYY-MM-DD_HH-MM-SS`) and automatic rotation (removes older backups after the new one completes to save disk space).
+- In-app restore (`File -> Restore from Backup...`) to restore `iPod_Control/{Device,iTunes,Artwork}` from the latest backup.
+- Latest backup timestamp and size display in `Help -> About & System Info...`.
+
 ## [0.1.4] - 2026-11-17
 
 ### Added

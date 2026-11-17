@@ -471,6 +471,16 @@ void showSystemInfoDialog(QWidget *parent, UiLang lang) {
     addReadOnlyRow(QStringLiteral("ffprobe:"), take(info.ffprobe_version));
     addReadOnlyRow(QStringLiteral("udisksctl:"), take(info.udisksctl_status));
     addReadOnlyRow(trText(lang, "sys.backup_dir"), take(info.backup_dir));
+    const QString lastBackup = info.last_backup_time ? QString::fromUtf8(info.last_backup_time) : QString();
+    if (lastBackup.isEmpty()) {
+        addReadOnlyRow(trText(lang, "sys.last_backup"), trText(lang, "sys.no_backup"));
+    } else {
+        const double mb = static_cast<double>(info.last_backup_size_bytes) / (1024.0 * 1024.0);
+        addReadOnlyRow(
+            trText(lang, "sys.last_backup"),
+            QString("%1 (%2 MB)").arg(lastBackup).arg(mb, 0, 'f', 2)
+        );
+    }
     addReadOnlyRow(trText(lang, "sys.repo"), QStringLiteral("https://github.com/m4sa-k1/PodDrop"));
 
     poddrop_free_system_info(&info);

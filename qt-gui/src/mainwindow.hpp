@@ -61,6 +61,7 @@ private:
 
     void openMountFolder();
     void ejectDevice();
+    void restoreFromBackup();
     void addMusicFiles();
     void createAlbum(const QString &initialAlbum = QString(), const QString &initialArtist = QString());
     void addToSelectedAlbum();
@@ -88,6 +89,7 @@ private:
     bool m_darkTheme = false;
     bool m_busy = false;
     QString m_mountPath;
+    QString m_backedUpMountPath;
     bool m_hasDevice = false;
     DeviceSummary m_device;
     QVector<TrackItem> m_tracks;
@@ -103,6 +105,7 @@ private:
     QMenu *m_helpMenu = nullptr;
     QAction *m_actOpen = nullptr;
     QAction *m_actRefresh = nullptr;
+    QAction *m_actRestoreBackup = nullptr;
     QAction *m_actEject = nullptr;
     QAction *m_actExit = nullptr;
     QAction *m_actAddMusic = nullptr;

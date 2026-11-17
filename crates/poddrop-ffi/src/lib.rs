@@ -95,6 +95,8 @@ pub struct PodDropSystemInfo {
     pub ffprobe_version: *mut c_char,
     pub udisksctl_status: *mut c_char,
     pub backup_dir: *mut c_char,
+    pub last_backup_time: *mut c_char,
+    pub last_backup_size_bytes: u64,
 }
 
 static VERSION_CSTR: std::sync::LazyLock<CString> =
@@ -532,6 +534,8 @@ pub unsafe extern "C" fn poddrop_get_system_info(out_info: *mut PodDropSystemInf
             ffprobe_version: to_c_char(&diag.ffprobe_version),
             udisksctl_status: to_c_char(&diag.udisksctl_status),
             backup_dir: to_c_char(&diag.backup_dir),
+            last_backup_time: to_c_char(diag.last_backup_time.as_deref().unwrap_or("")),
+            last_backup_size_bytes: diag.last_backup_size_bytes,
         };
     }
 }
@@ -549,6 +553,7 @@ pub unsafe extern "C" fn poddrop_free_system_info(info: *mut PodDropSystemInfo) 
         poddrop_free_string(i.ffprobe_version);
         poddrop_free_string(i.udisksctl_status);
         poddrop_free_string(i.backup_dir);
+        poddrop_free_string(i.last_backup_time);
     }
     i.app_name = ptr::null_mut();
     i.app_version = ptr::null_mut();
@@ -556,6 +561,69 @@ pub unsafe extern "C" fn poddrop_free_system_info(info: *mut PodDropSystemInfo) 
     i.ffprobe_version = ptr::null_mut();
     i.udisksctl_status = ptr::null_mut();
     i.backup_dir = ptr::null_mut();
+    i.last_backup_time = ptr::null_mut();
+    i.last_backup_size_bytes = 0;
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_create_backup(
+    mount_path: *const c_char,
+    out_backup_time: *mut *mut c_char,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    if !out_backup_time.is_null() {
+        unsafe { *out_backup_time = ptr::null_mut() };
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let root = poddrop_core::backup::default_backup_root();
+    match poddrop_core::backup::create_prewrite_backup(Path::new(&mp), &root) {
+        Ok(_) => {
+            if !out_backup_time.is_null() {
+                let ts = poddrop_core::backup::latest_backup(&root)
+                    .map(|b| b.created_at)
+                    .unwrap_or_default();
+                unsafe { *out_backup_time = to_c_char(&ts) };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn poddrop_restore_latest_backup(
+    mount_path: *const c_char,
+    out_restored_time: *mut *mut c_char,
+    out_err: *mut *mut c_char,
+) -> i32 {
+    clear_err(out_err);
+    if !out_restored_time.is_null() {
+        unsafe { *out_restored_time = ptr::null_mut() };
+    }
+    let Some(mp) = (unsafe { cstr_to_opt(mount_path) }) else {
+        set_err(out_err, "Null or empty mount_path");
+        return -1;
+    };
+    let root = poddrop_core::backup::default_backup_root();
+    match poddrop_core::backup::restore_latest_backup(Path::new(&mp), &root) {
+        Ok(summary) => {
+            if !out_restored_time.is_null() {
+                unsafe { *out_restored_time = to_c_char(&summary.created_at) };
+            }
+            0
+        }
+        Err(e) => {
+            set_err(out_err, &e.to_string());
+            -1
+        }
+    }
 }
 
 #[repr(C)]
