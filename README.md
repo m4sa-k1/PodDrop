@@ -11,7 +11,7 @@
 A lightweight, open-source desktop application for transferring music and registering cover artwork on classic iPods from Linux! 🐧✨
 
 ### ✨ Features
-- 🖥️ **Simple, snappy classic UI** (C++20 / Qt6 Widgets + Rust core, single binary ~1.9 MB)
+- 🖥️ **Simple, snappy classic UI** (C++20 / Qt6 Widgets + Rust core, single binary ~2.0 MB)
   - Intentionally keeps Qt's classic standard icons so the look and feel matches the 2000s classic iPod era with nostalgic charm
 - 🔌 **Plug-and-play auto-detection & auto-mount** (`udisks2` integration; detects iPods even when unmounted)
 - 🛡️ **Safety-first design to protect your iPod**
@@ -109,7 +109,7 @@ Linux でクラシック系 iPod へ音楽転送とカバー画像登録がで�
 
 ### ✨ 特徴・できること
 
-- 🖥️ **シンプルで軽快なクラシック UI**（C++20 / Qt6 Widgets + Rust コア、単一バイナリ約 1.9 MB）
+- 🖥️ **シンプルで軽快なクラシック UI**（C++20 / Qt6 Widgets + Rust コア、単一バイナリ約 2.0 MB）
   - あえて Qt のクラシックな標準アイコンのままにしているため、2000年代のクラシック iPod と年代が合った味わいのある見た目になっています
 - 🔌 **挿すだけで自動認識＆自動マウント**（`udisks2` 連携・未マウント状態でも自動検出）
 - 🛡️ **大切な iPod を守る安全設計**
